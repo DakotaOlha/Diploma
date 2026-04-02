@@ -2,7 +2,7 @@
 
 namespace Diploma.Core.Services;
 
-public class ScreenCaptureService: IScreenCaptureService
+public class LogService : ILogService
 {
     
 }
