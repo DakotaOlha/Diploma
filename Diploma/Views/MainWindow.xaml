@@ -1,4 +1,33 @@
-﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    
-</ResourceDictionary>
+﻿<Window x:Class="Diploma.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:hc="https://handyorg.github.io/handycontrol"
+        Title="AlgoReplay" Height="200" Width="400"
+        WindowStyle="SingleBorderWindow"
+        ResizeMode="NoResize">
+
+    <Grid Margin="20">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+
+            <TextBlock Text="AlgoReplay" FontSize="22" FontWeight="Bold"
+                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
+
+            <TextBlock Text="{Binding StatusText}"
+                       HorizontalAlignment="Center" Opacity="0.7" Margin="0,0,0,8"/>
+
+            <TextBlock Text="{Binding RecordingDuration, StringFormat={}{0:hh\\:mm\\:ss}}"
+                       HorizontalAlignment="Center" FontSize="18" Margin="0,0,0,12"/>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Button Content="▶ Start"
+                        Command="{Binding StartRecordingCommand}"
+                        Width="100" Margin="0,0,8,0"/>
+
+                <Button Content="⏹ Stop"
+                        Command="{Binding StopRecordingCommand}"
+                        Width="100"/>
+            </StackPanel>
+
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,6 +1,13 @@
-﻿namespace Diploma.Views;
+﻿using System.Windows;
+using Diploma.ViewModels;
 
-public class MainWindow_xaml
+namespace Diploma.Views;
+
+public partial class MainWindow : Window
 {
-    
+    public MainWindow(MainViewModel viewModel)
+    {
+        InitializeComponent();
+        DataContext = viewModel;
+    }
 }

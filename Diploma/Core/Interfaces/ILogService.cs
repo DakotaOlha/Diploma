@@ -1,6 +1,6 @@
 ﻿namespace Diploma.Core.Interfaces;
 
-public class ILogService
+public interface ILogService
 {
-    
+    Task LogEventAsync(string eventType, string description);
 }

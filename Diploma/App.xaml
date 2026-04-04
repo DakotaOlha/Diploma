@@ -1,8 +1,7 @@
-﻿<Application x:Class="AlgoReplay.App"
+﻿<Application x:Class="Diploma.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:hc="https://handyorg.github.io/handycontrol"
-             StartupUri="Views/MainWindow.xaml">
+             xmlns:hc="https://handyorg.github.io/handycontrol">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>

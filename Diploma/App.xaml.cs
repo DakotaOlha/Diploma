@@ -1,9 +1,8 @@
-﻿using System.Configuration;
-using System.Data;
-using System.Windows;
+﻿using System.Windows;
 using Diploma.Core.Interfaces;
 using Diploma.Core.Services;
 using Diploma.ViewModels;
+using Diploma.Views;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;

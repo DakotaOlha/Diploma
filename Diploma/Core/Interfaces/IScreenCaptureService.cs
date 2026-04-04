@@ -1,6 +1,9 @@
 ﻿namespace Diploma.Core.Interfaces;
 
-public class IScreenCaptureService
+public interface IScreenCaptureService
 {
-    
+    bool IsRecording { get; }
+    Task StartAsync(string outputPath, CancellationToken ct = default);
+    Task StopAsync();
+    event EventHandler<string>? StatusChanged;
 }
