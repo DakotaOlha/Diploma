@@ -13,6 +13,7 @@ using Vortice.Direct3D11;
 using Vortice.DXGI;
 using MapFlags = Vortice.Direct3D11.MapFlags;
 using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using WinRT;
 
 namespace Diploma.Core.Services;
@@ -29,6 +30,18 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     
     private int _frameCount = 0;
     
+    private readonly object _logLock = new();
+    private string _logBuffer = "";
+
+    private void Log(string message)
+    {
+        lock (_logLock)
+        {
+            _logBuffer += $"{DateTime.Now:HH:mm:ss.fff} | {message}\n";
+            StatusChanged?.Invoke(this, _logBuffer);
+        }
+    }
+    
     public async Task StartAsync(string outputPath, CancellationToken ct = default)
     {
         if (_isRecording) return;
@@ -36,7 +49,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _isRecording = true;
         
-        StatusChanged?.Invoke(this, "Recording started");
+        Log("Recording started");
         _ = Task.Run(() => CaptureLoop(outputPath, _cts.Token), _cts.Token);
     }
 
@@ -44,37 +57,26 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     {
         _cts?.Cancel();
         _isRecording = false;
-        StatusChanged?.Invoke(this, "Recording stopped");
+        Log("Recording stopped");
         await Task.Delay(500);
     }
 
     private async Task CaptureLoop(string outputPath, CancellationToken token)
     {
         try
-        { 
-            InitializeDirect3D();
-            
+        {
             GraphicsCaptureItem? item = null;
             var tcs = new TaskCompletionSource<GraphicsCaptureItem?>();
-
-            Application.Current.Dispatcher.Invoke(async () =>
-            {
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(
-                    Application.Current.MainWindow).Handle;
-                var result = await CapturePickerHelper.PickAsync(hwnd);
-                tcs.SetResult(result);
-            });
             
-            item = await tcs.Task;
-
-            StatusChanged?.Invoke(this, item == null
-                ? "Step 3: Item is NULL!"
-                : $"Step 3: Got item {item.DisplayName}");
+            item = await Application.Current.Dispatcher.InvokeAsync(async () =>
+            {
+                var hwnd = new WindowInteropHelper(Application.Current.MainWindow).Handle;
+                return await CapturePickerHelper.PickAsync(hwnd);
+            }).Task.Unwrap();
             
             if (item == null) return;
 
-            StatusChanged?.Invoke(this, "Step 4: Creating WinRT device...");
-            var winrtDevice = CreateWinRTDevice();
+            var winrtDevice = CreateDevice();
             var frameQueue = new System.Collections.Concurrent.ConcurrentQueue<byte[]>();
 
             Direct3D11CaptureFramePool? framePool = null;
@@ -83,43 +85,33 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             // framePool і session МАЮТЬ створюватись на UI потоці
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                StatusChanged?.Invoke(this, "Step 5: Creating frame pool...");
-                framePool = Direct3D11CaptureFramePool.Create(
+                framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
                     winrtDevice,
                     DirectXPixelFormat.B8G8R8A8UIntNormalized,
                     2,
                     item.Size);
 
-                StatusChanged?.Invoke(this, "Step 6: Creating session...");
                 session = framePool.CreateCaptureSession(item);
                 session.IsCursorCaptureEnabled = true;
 
                 framePool.FrameArrived += (pool, _) =>
                 {
-                    StatusChanged?.Invoke(this, "FrameArrived called!");
-
                     using var frame = pool.TryGetNextFrame();
                     if (frame == null)
                     {
-                        StatusChanged?.Invoke(this, "TryGetNextFrame = null!");
                         return;
                     }
 
-                    StatusChanged?.Invoke(this, $"Frame: {frame.ContentSize.Width}x{frame.ContentSize.Height}");
-
                     var bytes = ConvertFrameToBytes(frame);
-                    StatusChanged?.Invoke(this, bytes == null ? "ConvertFrame = NULL!" : $"Bytes: {bytes.Length}");
 
                     if (bytes != null)
                         frameQueue.Enqueue(bytes);
                 };
 
-                StatusChanged?.Invoke(this, "Step 7: StartCapture...");
                 session.StartCapture();
             });
 
             // Тепер чекаємо фреймів у фоновому потоці
-            StatusChanged?.Invoke(this, "Step 7.5: Waiting for first frame...");
             var firstFrameTimeout = DateTime.Now.AddSeconds(5);
             while (frameQueue.IsEmpty && DateTime.Now < firstFrameTimeout && !token.IsCancellationRequested)
             {
@@ -128,7 +120,6 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
 
             if (frameQueue.IsEmpty)
             {
-                StatusChanged?.Invoke(this, "Error: No frames received!");
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     session?.Dispose();
@@ -140,7 +131,6 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             int width = item.Size.Width;
             int height = item.Size.Height;
 
-            StatusChanged?.Invoke(this, "Step 8: Starting FFmpeg...");
             await EncodeThroughFFmpeg(outputPath, frameQueue, width, height, token);
 
             await Application.Current.Dispatcher.InvokeAsync(() =>
@@ -152,21 +142,33 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            StatusChanged?.Invoke(this, $"Error at: {ex.GetType().Name}: {ex.Message}");
             System.Diagnostics.Debug.WriteLine(ex.ToString());
         }
     }
     
-    private void InitializeDirect3D()
+    private IDirect3DDevice CreateDevice()
     {
         D3D11.D3D11CreateDevice(
-            null,
+            (IntPtr)null,
             DriverType.Hardware,
             DeviceCreationFlags.BgraSupport,
             null,
-            out _d3dDevice,
-            out _d3dContext
-        );
+            out var device,
+            out var context);
+
+        _d3dDevice = device;
+        _d3dContext = context;
+
+        using var dxgiDevice = device.QueryInterface<IDXGIDevice>();
+
+        CreateDirect3D11DeviceFromDXGIDevice(
+            dxgiDevice.NativePointer,
+            out var pDevice);
+
+        var winrtDevice = WinRT.MarshalInterface<IDirect3DDevice>.FromAbi(pDevice);
+        Marshal.Release(pDevice);
+
+        return winrtDevice;
     }
 
     private IDirect3DDevice CreateWinRTDevice()
@@ -229,74 +231,81 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
 
     private byte[]? ConvertFrameToBytes(Direct3D11CaptureFrame frame)
     {
-        if(_d3dDevice == null || _d3dContext == null) return null;
+        if (_d3dDevice == null || _d3dContext == null) return null;
 
         try
         {
-            // Правильний спосіб отримати ID3D11Texture2D з WinRT поверхні
-            var surface = frame.Surface;
+            // Отримуємо доступ до DXGI інтерфейсу через WinRT surface
+            var access = frame.Surface.As<IDirect3DDxgiInterfaceAccess>();
+
+            Guid guid = typeof(ID3D11Texture2D).GUID;
+            IntPtr texturePtr = access.GetInterface(guid);
             
-            // Конвертуємо через WinRT ABI
-            IntPtr surfacePtr = ((IWinRTObject)surface).NativeObject.ThisPtr;
-            
-            Guid texGuid = typeof(ID3D11Texture2D).GUID;
-            Marshal.QueryInterface(surfacePtr, ref texGuid, out var pTexture);
-            
-            if (pTexture == IntPtr.Zero)
+            if (texturePtr == IntPtr.Zero)
             {
-                StatusChanged?.Invoke(this, "pTexture is Zero!");
                 return null;
             }
 
-            var texture = (ID3D11Texture2D)Marshal.GetObjectForIUnknown(pTexture);
-            Marshal.Release(pTexture);
+            using var texture = new ID3D11Texture2D(texturePtr);
 
             var desc = texture.Description;
-            uint width = desc.Width;
-            uint height = desc.Height;
-
+            
+            // Створюємо staging texture для читання з CPU
             var stagingDesc = new Texture2DDescription
             {
-                Width = width,
-                Height = height,
+                Width = desc.Width,
+                Height = desc.Height,
                 MipLevels = 1,
                 ArraySize = 1,
-                Format = Vortice.DXGI.Format.B8G8R8A8_UNorm,
-                SampleDescription = new Vortice.DXGI.SampleDescription(1, 0),
+                Format = desc.Format,
+                SampleDescription = new SampleDescription(1, 0),
                 Usage = ResourceUsage.Staging,
                 BindFlags = BindFlags.None,
                 CPUAccessFlags = CpuAccessFlags.Read
             };
 
             using var stagingTexture = _d3dDevice.CreateTexture2D(stagingDesc);
+
+            // Копіюємо GPU → CPU texture
             _d3dContext.CopyResource(stagingTexture, texture);
 
             var mapped = _d3dContext.Map(stagingTexture, 0, MapMode.Read, MapFlags.None);
 
-            uint stride = mapped.RowPitch;
+            uint width = desc.Width;
+            uint height = desc.Height;
+
             byte[] data = new byte[width * height * 4];
 
             unsafe
             {
-                byte* src = (byte*)mapped.DataPointer;
+                byte* srcPtr = (byte*)mapped.DataPointer;
+                uint rowPitch = mapped.RowPitch;
+
                 for (int y = 0; y < height; y++)
                 {
-                    new Span<byte>(src + y * stride, (int)(width * 4))
-                        .CopyTo(data.AsSpan((int)(y * width * 4), (int)(width * 4)));
+                    var sourceRow = new ReadOnlySpan<byte>(srcPtr + y * rowPitch, (int)(width * 4));
+                    var destRow = new Span<byte>(data, (int)(y * width * 4), (int)(width * 4));
+                    sourceRow.CopyTo(destRow);
                 }
             }
 
             _d3dContext.Unmap(stagingTexture, 0);
-            texture.Dispose();
 
             return data;
         }
         catch (Exception ex)
         {
-            // Тепер бачимо реальну помилку замість мовчазного null
-            StatusChanged?.Invoke(this, $"ConvertFrame error: {ex.GetType().Name}: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[ConvertFrame Error]: {ex}");
             return null;
         }
+    }
+    
+    [ComImport]
+    [Guid("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IDirect3DDxgiInterfaceAccess
+    {
+        IntPtr GetInterface(in Guid iid);
     }
 
     public void Dispose()
