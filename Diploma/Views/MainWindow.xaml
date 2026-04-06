@@ -4,7 +4,7 @@
         xmlns:hc="https://handyorg.github.io/handycontrol"
         Title="AlgoReplay" Height="200" Width="400"
         WindowStyle="SingleBorderWindow"
-        ResizeMode="NoResize">
+        ResizeMode="CanResize">
 
     <Grid Margin="20">
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
