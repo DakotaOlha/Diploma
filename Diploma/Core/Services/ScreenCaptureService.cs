@@ -49,7 +49,6 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _isRecording = true;
         
-        Log("Recording started");
         _ = Task.Run(() => CaptureLoop(outputPath, _cts.Token), _cts.Token);
     }
 
@@ -65,24 +64,28 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     {
         try
         {
-            GraphicsCaptureItem? item = null;
-            var tcs = new TaskCompletionSource<GraphicsCaptureItem?>();
+            GraphicsCaptureItem? item;
             
             item = await Application.Current.Dispatcher.InvokeAsync(async () =>
             {
                 var hwnd = new WindowInteropHelper(Application.Current.MainWindow).Handle;
                 return await CapturePickerHelper.PickAsync(hwnd);
             }).Task.Unwrap();
-            
-            if (item == null) return;
 
+            if (item == null)
+            {
+                _isRecording = false;
+                return;
+            }
+
+            Log("Recording started");
+            
             var winrtDevice = CreateDevice();
             var frameQueue = new System.Collections.Concurrent.ConcurrentQueue<byte[]>();
 
             Direct3D11CaptureFramePool? framePool = null;
             GraphicsCaptureSession? session = null;
 
-            // framePool і session МАЮТЬ створюватись на UI потоці
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
@@ -111,7 +114,6 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                 session.StartCapture();
             });
 
-            // Тепер чекаємо фреймів у фоновому потоці
             var firstFrameTimeout = DateTime.Now.AddSeconds(5);
             while (frameQueue.IsEmpty && DateTime.Now < firstFrameTimeout && !token.IsCancellationRequested)
             {
@@ -196,9 +198,11 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         int width, int height,
         CancellationToken token)
     {
+        bool stopRequested = false;
+        
         IEnumerable<IVideoFrame> GenerateFrames()
         {
-            while (!token.IsCancellationRequested)
+            while (!stopRequested || !frameQueue.IsEmpty)
             {
                 if (frameQueue.TryDequeue(out var bytes))
                 {
@@ -206,7 +210,8 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                 }
                 else
                 {
-                    Thread.Sleep(5);
+                    if (stopRequested) break;
+                    Thread.Sleep(1);
                 }
             }
         }
@@ -216,17 +221,31 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             FrameRate = 30
         };
 
-        await FFMpegArguments
-            .FromPipeInput(videoFramesSource, opts => opts
-                .WithVideoCodec("rawvideo")
-                .ForceFormat("rawvideo")
-                .WithCustomArgument($"-pix_fmt bgra -s {width}x{height}"))
-            .OutputToFile(outputPath, overwrite: true, opts => opts
-                .WithVideoCodec("libx264")
-                .WithConstantRateFactor(23)
-                .WithCustomArgument("-preset ultrafast")
-                .WithCustomArgument("-pix_fmt yuv420p"))
-            .ProcessAsynchronously();
+        try 
+        {
+            var analyzeTask = FFMpegArguments
+                .FromPipeInput(videoFramesSource, opts => opts
+                    .WithVideoCodec("rawvideo")
+                    .ForceFormat("rawvideo")
+                    .WithCustomArgument($"-pix_fmt bgra -s {width}x{height}"))
+                .OutputToFile(outputPath, overwrite: true, opts => opts
+                    .WithVideoCodec("libx264")
+                    .WithConstantRateFactor(23)
+                    .WithCustomArgument("-preset ultrafast")
+                    .WithCustomArgument("-pix_fmt yuv420p"))
+                .ProcessAsynchronously();
+            
+            await Task.Delay(-1, token).ContinueWith(_ => { });
+        
+            stopRequested = true; 
+        
+            Log("Finishing writing frames...");
+            await analyzeTask;
+        }
+        catch (Exception ex)
+        {
+            Log($"Encoding error: {ex.Message}");
+        }
     }
 
     private byte[]? ConvertFrameToBytes(Direct3D11CaptureFrame frame)
