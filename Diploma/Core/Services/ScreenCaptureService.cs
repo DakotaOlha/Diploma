@@ -1,4 +1,5 @@
-﻿using System.Windows;
+﻿using System.Runtime.InteropServices;
+using System.Windows;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
@@ -9,6 +10,8 @@ using FFMpegCore;
 using FFMpegCore.Pipes;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
+using Vortice.DXGI;
+using MapFlags = Vortice.Direct3D11.MapFlags;
 
 namespace Diploma.Core.Services;
 
@@ -44,7 +47,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     private async Task CaptureLoop(string outputPath, CancellationToken token)
     {
         try
-        {
+        { 
             InitializeDirect3D();
             
             GraphicsCaptureItem? item = null;
@@ -60,34 +63,32 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
 
             var winrtDevice = CreateWinRTDevice();
             
-           using var framePool = Direct3D11CaptureFramePool.Create(
-               winrtDevice,
-               DirectXPixelFormat.B8G8R8A8UIntNormalized,
-               2,
-               item.Size);
+            using var framePool = Direct3D11CaptureFramePool.Create(
+                winrtDevice,
+                DirectXPixelFormat.B8G8R8A8UIntNormalized,
+                2,
+                item.Size);
            
-           using var session = framePool.CreateCaptureSession(item);
-           session.IsCursorCaptureEnabled = true;
+            using var session = framePool.CreateCaptureSession(item);
+            session.IsCursorCaptureEnabled = true;
            
-           framePool.FrameArrived += (pool, _) =>
-           {
-               using var frame = pool.TryGetNextFrame();
-               if (frame == null) return;
+            framePool.FrameArrived += (pool, _) =>
+            { 
+                using var frame = pool.TryGetNextFrame();
+                if (frame == null) return;
                
-               var bytes = ConvertFrameToBytes(frame);
-               if (bytes != null) frameQueue.Enqueue(bytes); 
-           };
+                var bytes = ConvertFrameToBytes(frame);
+                if (bytes != null) frameQueue.Enqueue(bytes); 
+            };
            
-           session.StartCapture();
+            session.StartCapture();
            
-           int width = item.Size.Width;
-           int height = item.Size.Height;
+            int width = item.Size.Width;
+            int height = item.Size.Height;
            
-           await EncodeThroughFFmpeg(outputPath, frameQueue, width, height, token);
+            await EncodeThroughFFmpeg(outputPath, frameQueue, width, height, token);
         }
-        catch (OperationCanceledException)
-        {
-        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             StatusChanged?.Invoke(this, $"Error: {ex.Message}");
@@ -104,6 +105,21 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             out _d3dDevice,
             out _d3dContext
         );
+    }
+
+    private IDirect3DDevice CreateWinRTDevice()
+    {
+        using var dxgiDevice = _d3dDevice!.QueryInterface<IDXGIDevice>();
+        var pUnknow = Marshal.GetIUnknownForObject(dxgiDevice);
+
+        Guid guid = typeof(IDirect3DDevice).GUID;
+        Marshal.QueryInterface(pUnknow, ref guid, out var pDevice);
+        Marshal.Release(pUnknow);
+
+        var result = Marshal.GetObjectForIUnknown(pDevice) as IDirect3DDevice;
+        Marshal.Release(pDevice);
+
+        return result;
     }
 
     private async Task EncodeThroughFFmpeg(
@@ -148,31 +164,73 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     private byte[]? ConvertFrameToBytes(Direct3D11CaptureFrame frame)
     {
         if(_d3dDevice == null || _d3dContext == null) return null;
-        
-        var surface = frame.Surface;
-        
-        var access = surface.QueryInterface<Vortice.Direct3D11.IDirect3DDxgiInterfaceAccess>();
-    }
-    
-    private IDirect3DDevice CreateDirect3DDevice()
-    {
-        Vortice.Direct3D11.D3D11.D3D11CreateDevice(
-            null,
-            Vortice.Direct3D.DriverType.Hardware,
-            Vortice.Direct3D11.DeviceCreationFlags.BgraSupport,
-            null,
-            out _d3dDevice);
-        
-        _d3dContext = _d3dDevice.ImmediateContext;
-        
-        var dxgiDevice = _d3dDevice.QueryInterface<Vortice.DXGI.IDXGIDevice>();
-        
-        return Vortice.Direct3D11.D3D11.CreateDirect3D11DeviceFromDXGIDevice<Windows.Graphics.DirectX.Direct3D11.IDirect3DDevice>(dxgiDevice);
+
+        try
+        {
+            var surface = frame.Surface;
+            
+            var pUnknown = Marshal.GetIUnknownForObject(surface);
+             Guid texGuid = typeof(ID3D11Texture2D).GUID;
+             Marshal.QueryInterface(pUnknown, ref texGuid, out var pTexture);
+             Marshal.Release(pUnknown);
+
+             var texture = Marshal.GetObjectForIUnknown(pTexture) as ID3D11Texture2D;
+             Marshal.Release(pTexture);
+
+             if (texture == null) return null;
+
+             var desc = texture.Description;
+             var width = desc.Width;
+             var height = desc.Height;
+             
+             var stagingDesc = new Texture2DDescription
+             {
+                 Width = width,
+                 Height = height,
+                 MipLevels = 1,
+                 ArraySize = 1,
+                 Format = Vortice.DXGI.Format.B8G8R8A8_UNorm,
+                 SampleDescription = new Vortice.DXGI.SampleDescription(1, 0),
+                 Usage = ResourceUsage.Staging,
+                 BindFlags = BindFlags.None,
+                 CPUAccessFlags = CpuAccessFlags.Read
+             };
+             
+             using var stagingTexture = _d3dDevice.CreateTexture2D(stagingDesc);
+             
+             _d3dContext.CopyResource(stagingTexture, texture);
+
+             var mapped = _d3dContext.Map(stagingTexture, 0, MapMode.Read, MapFlags.None);
+
+             uint stride = mapped.RowPitch;
+             byte[] data = new byte[width * height * 4];
+
+             unsafe
+             {
+                 byte* src = (byte*)mapped.DataPointer;
+                 for (int y = 0; y < height; y++)
+                 {
+                     new Span<byte>(src + y * stride, (int)(width * 4))
+                         .CopyTo(data.AsSpan((int)(y * width * 4), (int)(width * 4)));
+                 }
+             }
+             
+             _d3dContext.Unmap(stagingTexture, 0);
+             texture.Dispose();
+
+             return data;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public void Dispose()
     {
         _cts?.Cancel();
         _cts?.Dispose();
+        _d3dContext?.Dispose();
+        _d3dDevice?.Dispose();
     }
 }
