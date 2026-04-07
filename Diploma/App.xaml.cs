@@ -1,6 +1,8 @@
-﻿using System.Windows;
+﻿using System.IO;
+using System.Windows;
 using Diploma.Core.Interfaces;
 using Diploma.Core.Services;
+using Diploma.Data.Database;
 using Diploma.ViewModels;
 using Diploma.Views;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,11 +26,18 @@ public partial class App : Application
             .UseSerilog()
             .ConfigureServices((context, services) =>
             {
-                services.AddSingleton<IScreenCaptureService, ScreenCaptureService>();
-                services.AddSingleton<ILogService, LogService>();
+                var appData = Environment.GetFolderPath(
+                    Environment.SpecialFolder.ApplicationData);
+                var dbPath = Path.Combine(appData, "AlgoReplay", "data.db");
+                var connStr = $"Data Source={dbPath}";
 
-                services.AddSingleton<MainViewModel>();
+                var dbInit = new DatabaseInitializer(connStr);
+                dbInit.Initialize();
                 
+                services.AddSingleton<ILogService>(_ => new LogService(connStr));
+
+                services.AddSingleton<IScreenCaptureService, ScreenCaptureService>();
+                services.AddSingleton<MainViewModel>();
                 services.AddSingleton<MainWindow>();
             })
             .Build();
