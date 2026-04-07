@@ -28,7 +28,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     public bool IsRecording => _isRecording;
     public event EventHandler<string>? StatusChanged;
     
-    private int _frameCount = 0;
+    private volatile byte[]? _latestFrame = null;
     
     private readonly object _logLock = new();
     private string _logBuffer = "";
@@ -64,9 +64,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     {
         try
         {
-            GraphicsCaptureItem? item;
-            
-            item = await Application.Current.Dispatcher.InvokeAsync(async () =>
+            var item = await Application.Current.Dispatcher.InvokeAsync(async () =>
             {
                 var hwnd = new WindowInteropHelper(Application.Current.MainWindow).Handle;
                 return await CapturePickerHelper.PickAsync(hwnd);
@@ -81,7 +79,6 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             Log("Recording started");
             
             var winrtDevice = CreateDevice();
-            var frameQueue = new System.Collections.Concurrent.ConcurrentQueue<byte[]>();
 
             Direct3D11CaptureFramePool? framePool = null;
             GraphicsCaptureSession? session = null;
@@ -100,28 +97,26 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                 framePool.FrameArrived += (pool, _) =>
                 {
                     using var frame = pool.TryGetNextFrame();
-                    if (frame == null)
-                    {
-                        return;
-                    }
+                    if (frame == null) return;
 
                     var bytes = ConvertFrameToBytes(frame);
 
                     if (bytes != null)
-                        frameQueue.Enqueue(bytes);
+                        _latestFrame = bytes;
                 };
 
                 session.StartCapture();
             });
 
             var firstFrameTimeout = DateTime.Now.AddSeconds(5);
-            while (frameQueue.IsEmpty && DateTime.Now < firstFrameTimeout && !token.IsCancellationRequested)
+            while (_latestFrame == null && DateTime.Now < firstFrameTimeout && !token.IsCancellationRequested)
             {
                 await Task.Delay(50, token);
             }
 
-            if (frameQueue.IsEmpty)
+            if (_latestFrame == null)
             {
+                Log("No frames received, aborting");
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     session?.Dispose();
@@ -133,7 +128,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             int width = item.Size.Width;
             int height = item.Size.Height;
 
-            await EncodeThroughFFmpeg(outputPath, frameQueue, width, height, token);
+            await EncodeThroughFFmpeg(outputPath, width, height, token);
 
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
@@ -194,25 +189,39 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
 
     private async Task EncodeThroughFFmpeg(
         string outputPath,
-        System.Collections.Concurrent.ConcurrentQueue<byte[]> frameQueue,
         int width, int height,
         CancellationToken token)
     {
+        var frameInterval = TimeSpan.FromSeconds(1.0 / 30);
         bool stopRequested = false;
         
         IEnumerable<IVideoFrame> GenerateFrames()
         {
-            while (!stopRequested || !frameQueue.IsEmpty)
+            byte[]? lastFrame = null;
+            
+            while (lastFrame == null && !stopRequested)
             {
-                if (frameQueue.TryDequeue(out var bytes))
-                {
-                    yield return new BgraVideoFrame(bytes, width, height);
-                }
-                else
-                {
-                    if (stopRequested) break;
-                    Thread.Sleep(1);
-                }
+                lastFrame = _latestFrame;
+                if (lastFrame == null)
+                    Thread.Sleep(10);
+            }
+            
+            if (lastFrame == null) yield break;
+            
+            while (!stopRequested)
+            {
+                var frameStart = DateTime.UtcNow;
+                
+                var current = _latestFrame;
+                if (current != null)
+                    lastFrame = current;
+                
+                yield return new BgraVideoFrame(lastFrame, width, height);
+                
+                var elapsed = DateTime.UtcNow - frameStart;
+                var delay = frameInterval - elapsed;
+                if (delay > TimeSpan.Zero)
+                    Thread.Sleep(delay);
             }
         }
         
@@ -220,6 +229,8 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         {
             FrameRate = 30
         };
+        
+        using var emergencyCts = new CancellationTokenSource();
 
         try 
         {
@@ -233,18 +244,30 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                     .WithConstantRateFactor(23)
                     .WithCustomArgument("-preset ultrafast")
                     .WithCustomArgument("-pix_fmt yuv420p"))
+                .CancellableThrough(emergencyCts.Token)
                 .ProcessAsynchronously();
             
             await Task.Delay(-1, token).ContinueWith(_ => { });
         
             stopRequested = true; 
-        
             Log("Finishing writing frames...");
-            await analyzeTask;
+        
+            var completed = await Task.WhenAny(analyzeTask, Task.Delay(15000));
+            if (completed != analyzeTask)
+            {
+                Log("FFmpeg timeout — force cancelling");
+                emergencyCts.Cancel();
+                await analyzeTask.ContinueWith(_ => { });
+            }
+            else
+            {
+                await analyzeTask;
+                Log("Recording saved successfully");
+            }
         }
         catch (Exception ex)
         {
-            Log($"Encoding error: {ex.Message}");
+            Log($"Encoding error: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
