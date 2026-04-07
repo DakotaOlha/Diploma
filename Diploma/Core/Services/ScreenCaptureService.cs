@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
@@ -12,7 +13,6 @@ using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 using MapFlags = Vortice.Direct3D11.MapFlags;
-using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using WinRT;
 
@@ -20,47 +20,62 @@ namespace Diploma.Core.Services;
 
 public class ScreenCaptureService: IScreenCaptureService, IDisposable
 {
+    private const int FFmpegShutdownTimeoutMs = 15_000;
+    private const int FirstFrameTimeoutSeconds = 5;
+    private const int FramePoolBufferCount = 2;
+    private const int TargetFrameRate = 30;
+    
     private CancellationTokenSource? _cts;
-    private bool _isRecording;
-    private Vortice.Direct3D11.ID3D11Device? _d3dDevice;
-    private Vortice.Direct3D11.ID3D11DeviceContext? _d3dContext;
+    private Task? _captureTask;
+    private volatile bool _isRecording;
+    private volatile byte[]? _latestFrame;
+    private bool _disposed;
     
-    public bool IsRecording => _isRecording;
-    public event EventHandler<string>? StatusChanged;
-    public event EventHandler? RecordingStarted;
-    
-    private volatile byte[]? _latestFrame = null;
+    private ID3D11Device? _d3dDevice;
+    private ID3D11DeviceContext? _d3dContext;
     
     private readonly object _logLock = new();
-    private string _logBuffer = "";
-
-    private void Log(string message)
-    {
-        lock (_logLock)
-        {
-            _logBuffer += $"{DateTime.Now:HH:mm:ss.fff} | {message}\n";
-            StatusChanged?.Invoke(this, _logBuffer);
-        }
-    }
+    private readonly StringBuilder _logBuffer = new();
     
-    public async Task StartAsync(string outputPath, CancellationToken ct = default)
+    public bool IsRecording => _isRecording;
+    
+    public event EventHandler<string>? StatusChanged;
+    public event EventHandler? RecordingStarted;
+
+    public Task StartAsync(string outputPath, CancellationToken ct = default)
     {
-        if (_isRecording) return;
+        if (_isRecording) return Task.CompletedTask;
         
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _isRecording = true;
         
-        _ = Task.Run(() => CaptureLoop(outputPath, _cts.Token), _cts.Token);
+        _captureTask = Task.Run(() => CaptureLoop(outputPath, _cts.Token), _cts.Token);
+        return Task.CompletedTask;
     }
-
+    
     public async Task StopAsync()
     {
         _cts?.Cancel();
         _isRecording = false;
+        
+        if (_captureTask != null)
+            await _captureTask.ConfigureAwait(false);
+        
         Log("Recording stopped");
-        await Task.Delay(500);
     }
-
+    
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        
+        _cts?.Cancel();
+        _captureTask?.Wait(TimeSpan.FromSeconds(2));
+        _cts?.Dispose();
+        _d3dContext?.Dispose();
+        _d3dDevice?.Dispose();
+    }
+    
     private async Task CaptureLoop(string outputPath, CancellationToken token)
     {
         try
@@ -89,7 +104,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                 framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
                     winrtDevice,
                     DirectXPixelFormat.B8G8R8A8UIntNormalized,
-                    2,
+                    FramePoolBufferCount,
                     item.Size);
 
                 session = framePool.CreateCaptureSession(item);
@@ -109,7 +124,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                 session.StartCapture();
             });
 
-            var firstFrameTimeout = DateTime.Now.AddSeconds(5);
+            var firstFrameTimeout = DateTime.Now.AddSeconds(FirstFrameTimeoutSeconds);
             while (_latestFrame == null && DateTime.Now < firstFrameTimeout && !token.IsCancellationRequested)
             {
                 await Task.Delay(50, token);
@@ -140,60 +155,15 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine(ex.ToString());
+            Log($"Capture error: {ex.GetType().Name}: {ex.Message}");
         }
     }
     
-    private IDirect3DDevice CreateDevice()
-    {
-        D3D11.D3D11CreateDevice(
-            (IntPtr)null,
-            DriverType.Hardware,
-            DeviceCreationFlags.BgraSupport,
-            null,
-            out var device,
-            out var context);
-
-        _d3dDevice = device;
-        _d3dContext = context;
-
-        using var dxgiDevice = device.QueryInterface<IDXGIDevice>();
-
-        CreateDirect3D11DeviceFromDXGIDevice(
-            dxgiDevice.NativePointer,
-            out var pDevice);
-
-        var winrtDevice = WinRT.MarshalInterface<IDirect3DDevice>.FromAbi(pDevice);
-        Marshal.Release(pDevice);
-
-        return winrtDevice;
-    }
-
-    private IDirect3DDevice CreateWinRTDevice()
-    {
-        using var dxgiDevice = _d3dDevice!.QueryInterface<IDXGIDevice>();
-    
-        CreateDirect3D11DeviceFromDXGIDevice(
-            dxgiDevice.NativePointer, out var pDevice);
-
-        var result = WinRT.MarshalInterface<IDirect3DDevice>.FromAbi(pDevice);
-        Marshal.Release(pDevice);
-    
-        return result;
-    }
-    
-    [DllImport("d3d11.dll", EntryPoint = "CreateDirect3D11DeviceFromDXGIDevice",
-        SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true,
-        CallingConvention = CallingConvention.StdCall)]
-    private static extern int CreateDirect3D11DeviceFromDXGIDevice(
-        IntPtr dxgiDevice, out IntPtr graphicsDevice);
-
     private async Task EncodeThroughFFmpeg(
         string outputPath,
         int width, int height,
         CancellationToken token)
     {
-        var frameInterval = TimeSpan.FromSeconds(1.0 / 30);
         bool stopRequested = false;
         bool firstFrameFired = false;
         
@@ -229,7 +199,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
 
                 frameIndex++;
 
-                var nextFrameTime = startTime + TimeSpan.FromSeconds(frameIndex / 30.0);
+                var nextFrameTime = startTime + TimeSpan.FromSeconds(frameIndex / (double)TargetFrameRate);
                 var sleepTime = nextFrameTime - DateTime.UtcNow;
 
                 if (sleepTime > TimeSpan.Zero)
@@ -264,7 +234,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             stopRequested = true; 
             Log("Finishing writing frames...");
         
-            var completed = await Task.WhenAny(analyzeTask, Task.Delay(15000));
+            var completed = await Task.WhenAny(analyzeTask, Task.Delay(FFmpegShutdownTimeoutMs));
             if (completed != analyzeTask)
             {
                 Log("FFmpeg timeout — force cancelling");
@@ -282,6 +252,33 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             Log($"Encoding error: {ex.GetType().Name}: {ex.Message}");
         }
     }
+    
+    private IDirect3DDevice CreateDevice()
+    {
+        var result = D3D11.D3D11CreateDevice(
+            (IntPtr)null,
+            DriverType.Hardware,
+            DeviceCreationFlags.BgraSupport,
+            null!,
+            out var device,
+            out var context);
+        
+        result.CheckError();
+
+        _d3dDevice = device;
+        _d3dContext = context;
+
+        using var dxgiDevice = device.QueryInterface<IDXGIDevice>();
+
+        CreateDirect3D11DeviceFromDXGIDevice(
+            dxgiDevice.NativePointer,
+            out var pDevice);
+
+        var winrtDevice = WinRT.MarshalInterface<IDirect3DDevice>.FromAbi(pDevice);
+        Marshal.Release(pDevice);
+
+        return winrtDevice;
+    }
 
     private byte[]? ConvertFrameToBytes(Direct3D11CaptureFrame frame)
     {
@@ -289,7 +286,6 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
 
         try
         {
-            // Отримуємо доступ до DXGI інтерфейсу через WinRT surface
             var access = frame.Surface.As<IDirect3DDxgiInterfaceAccess>();
 
             Guid guid = typeof(ID3D11Texture2D).GUID;
@@ -304,7 +300,6 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
 
             var desc = texture.Description;
             
-            // Створюємо staging texture для читання з CPU
             var stagingDesc = new Texture2DDescription
             {
                 Width = desc.Width,
@@ -320,53 +315,63 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
 
             using var stagingTexture = _d3dDevice.CreateTexture2D(stagingDesc);
 
-            // Копіюємо GPU → CPU texture
             _d3dContext.CopyResource(stagingTexture, texture);
 
             var mapped = _d3dContext.Map(stagingTexture, 0, MapMode.Read, MapFlags.None);
 
-            uint width = desc.Width;
-            uint height = desc.Height;
-
-            byte[] data = new byte[width * height * 4];
-
-            unsafe
+            try
             {
-                byte* srcPtr = (byte*)mapped.DataPointer;
-                uint rowPitch = mapped.RowPitch;
+                uint width = desc.Width;
+                uint height = desc.Height;
 
-                for (int y = 0; y < height; y++)
+                byte[] data = new byte[width * height * 4];
+
+                unsafe
                 {
-                    var sourceRow = new ReadOnlySpan<byte>(srcPtr + y * rowPitch, (int)(width * 4));
-                    var destRow = new Span<byte>(data, (int)(y * width * 4), (int)(width * 4));
-                    sourceRow.CopyTo(destRow);
+                    byte* srcPtr = (byte*)mapped.DataPointer;
+                    uint rowPitch = mapped.RowPitch;
+
+                    for (int y = 0; y < height; y++)
+                    {
+                        var sourceRow = new ReadOnlySpan<byte>(srcPtr + y * rowPitch, (int)(width * 4));
+                        var destRow = new Span<byte>(data, (int)(y * width * 4), (int)(width * 4));
+                        sourceRow.CopyTo(destRow);
+                    }
                 }
+                return data;
             }
-
-            _d3dContext.Unmap(stagingTexture, 0);
-
-            return data;
+            finally
+            {
+                _d3dContext.Unmap(stagingTexture, 0);
+            }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[ConvertFrame Error]: {ex}");
+            Log($"Capture error: {ex.GetType().Name}: {ex.Message}");
             return null;
         }
     }
     
-    [ComImport]
-    [Guid("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IDirect3DDxgiInterfaceAccess
+    private void Log(string message)
     {
-        IntPtr GetInterface(in Guid iid);
+        lock (_logLock)
+        {
+            _logBuffer.AppendLine($"{DateTime.Now:HH:mm:ss.fff} | {message}");
+            StatusChanged?.Invoke(this, _logBuffer.ToString());
+        }
     }
+    
+    [DllImport("d3d11.dll", EntryPoint = "CreateDirect3D11DeviceFromDXGIDevice",
+        SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true,
+        CallingConvention = CallingConvention.StdCall)]
+    private static extern int CreateDirect3D11DeviceFromDXGIDevice(
+        IntPtr dxgiDevice, out IntPtr graphicsDevice);
+}
 
-    public void Dispose()
-    {
-        _cts?.Cancel();
-        _cts?.Dispose();
-        _d3dContext?.Dispose();
-        _d3dDevice?.Dispose();
-    }
+[ComImport]
+[Guid("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IDirect3DDxgiInterfaceAccess
+{
+    IntPtr GetInterface(in Guid iid);
 }
