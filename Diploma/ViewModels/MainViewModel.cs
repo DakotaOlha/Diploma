@@ -24,6 +24,20 @@ public partial class MainViewModel : ObservableObject
         {
             StatusText = msg;
         };
+
+        _captureService.RecordingStarted += (_, _) =>
+        {
+            App.Current.Dispatcher.Invoke(() =>
+            {
+                _durationTimer = new System.Timers.Timer(1000);
+                _durationTimer.Elapsed += (_, _) =>
+                {
+                    App.Current.Dispatcher.Invoke(() =>
+                        RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1)));
+                };
+                _durationTimer.Start();
+            });
+        };
     }
 
     [RelayCommand]
@@ -38,14 +52,6 @@ public partial class MainViewModel : ObservableObject
 
         await _captureService.StartAsync(outputPath);
         IsRecording = true;
-
-        _durationTimer = new System.Timers.Timer(1000);
-        _durationTimer.Elapsed += (_, _) =>
-        {
-            App.Current.Dispatcher.Invoke(() =>
-                    RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1)));
-        };
-        _durationTimer.Start();
     }
 
     [RelayCommand]

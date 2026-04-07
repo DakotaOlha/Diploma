@@ -27,6 +27,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     
     public bool IsRecording => _isRecording;
     public event EventHandler<string>? StatusChanged;
+    public event EventHandler? RecordingStarted;
     
     private volatile byte[]? _latestFrame = null;
     
@@ -194,6 +195,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     {
         var frameInterval = TimeSpan.FromSeconds(1.0 / 30);
         bool stopRequested = false;
+        bool firstFrameFired = false;
         
         IEnumerable<IVideoFrame> GenerateFrames()
         {
@@ -208,20 +210,30 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             
             if (lastFrame == null) yield break;
             
+            if (!firstFrameFired)
+            {
+                firstFrameFired = true;
+                RecordingStarted?.Invoke(this, EventArgs.Empty);
+            }
+            
+            var startTime = DateTime.UtcNow;
+            long frameIndex = 0;
+            
             while (!stopRequested)
             {
-                var frameStart = DateTime.UtcNow;
-                
                 var current = _latestFrame;
                 if (current != null)
                     lastFrame = current;
-                
+
                 yield return new BgraVideoFrame(lastFrame, width, height);
-                
-                var elapsed = DateTime.UtcNow - frameStart;
-                var delay = frameInterval - elapsed;
-                if (delay > TimeSpan.Zero)
-                    Thread.Sleep(delay);
+
+                frameIndex++;
+
+                var nextFrameTime = startTime + TimeSpan.FromSeconds(frameIndex / 30.0);
+                var sleepTime = nextFrameTime - DateTime.UtcNow;
+
+                if (sleepTime > TimeSpan.Zero)
+                    Thread.Sleep(sleepTime);
             }
         }
         
