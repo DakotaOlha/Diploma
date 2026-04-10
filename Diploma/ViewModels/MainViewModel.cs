@@ -21,17 +21,30 @@ public partial class MainViewModel : ObservableObject
     private readonly IScreenCaptureService _captureService;
     private readonly ILogService _logService;
     private readonly IInputMonitorService _inputMonitor;
+    private readonly IAudioCaptureService _audioCaptureService;
+    
+    private string _currentAudioPath = string.Empty;
+    
+    [ObservableProperty] private bool _isMicEnabled = true;
+    [ObservableProperty] private string _selectedMicDevice = string.Empty;
+    [ObservableProperty] private IReadOnlyList<string> _micDevices = [];
     
     private int _currentSessionId;
 
     public MainViewModel(
         IScreenCaptureService captureService, 
         ILogService logService, 
-        IInputMonitorService inputMonitor)
+        IInputMonitorService inputMonitor,
+        IAudioCaptureService audioCaptureService)
     {
         _captureService = captureService;
         _logService = logService;
         _inputMonitor = inputMonitor;
+        _audioCaptureService = audioCaptureService;
+        
+        MicDevices = _audioCaptureService.GetAvailableDevices();
+            if (MicDevices.Count > 0)
+                SelectedMicDevice = MicDevices[0];
         
         if (_inputMonitor is InputMonitorService monitor)
         {
@@ -56,22 +69,26 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task StartRecordingAsync()
     {
-        var outputPath = Path.Combine(
+        var timestamp  = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        var sessionDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
-            "AlgoReplay",
-            $"session_{DateTime.Now:yyyyMMdd_HHmmss}.mp4");
+            "AlgoReplay", timestamp);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        Directory.CreateDirectory(sessionDir);
+
+        var videoPath = Path.Combine(sessionDir, "screen.mp4");
+        _currentAudioPath = Path.Combine(sessionDir, "audio.wav");
 
         _currentSessionId = await _logService.StartSessionAsync(
             name: $"Session {DateTime.Now:dd.MM.yyyy HH:mm}",
             mode: RecordingMode.Personal,
-            videoFilePath: outputPath);
+            videoFilePath: videoPath);
 
         _inputMonitor.Stop();
         _inputMonitor.Start(_currentSessionId);
-        
-        await _captureService.StartAsync(outputPath);
+
+        await _captureService.StartAsync(videoPath);
+
         IsRecording = true;
 
         await _logService.LogEventAsync(
@@ -83,11 +100,18 @@ public partial class MainViewModel : ObservableObject
     {
         await _captureService.StopAsync();
 
+        if (_audioCaptureService.IsRecording)
+        {
+            await _audioCaptureService.StopAsync();
+            await _logService.LogEventAsync(
+                _currentSessionId, "AUDIO_STOP", "Microphone recording stopped");
+        }
+
         await _logService.LogEventAsync(
             _currentSessionId, "RECORDING_STOP", "Recording stopped");
 
         await _logService.EndSessionAsync(_currentSessionId);
-        
+
         _inputMonitor.Stop();
         _inputMonitor.Start(0);
 
@@ -98,15 +122,33 @@ public partial class MainViewModel : ObservableObject
         RecordingDuration = TimeSpan.Zero;
     }
     
-    private void OnRecordingStarted(object? sender, EventArgs e)
+    private async void OnRecordingStarted(object? sender, EventArgs e)
     {
-        App.Current.Dispatcher.Invoke(() =>
+        await App.Current.Dispatcher.InvokeAsync(async () =>
         {
+            _durationTimer?.Stop(); 
             _durationTimer = new System.Timers.Timer(1000);
             _durationTimer.Elapsed += (_, _) =>
                 App.Current.Dispatcher.Invoke(() =>
                     RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1)));
             _durationTimer.Start();
+
+            if (IsMicEnabled && MicDevices.Count > 0)
+            {
+                try 
+                {
+                    _audioCaptureService.SelectedDevice = SelectedMicDevice;
+                    await _audioCaptureService.StartAsync(_currentAudioPath);
+
+                    await _logService.LogEventAsync(
+                        _currentSessionId, "AUDIO_START",
+                        $"Microphone recording started: {SelectedMicDevice}");
+                }
+                catch (Exception ex)
+                {
+                    StatusText = "Audio Error: " + ex.Message;
+                }
+            }
         });
     }
 }
