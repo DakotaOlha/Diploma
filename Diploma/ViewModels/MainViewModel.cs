@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Diploma.Core.Interfaces;
 using Diploma.Core.Models;
+using Diploma.Core.Services;
 
 namespace Diploma.ViewModels;
 
@@ -19,32 +20,37 @@ public partial class MainViewModel : ObservableObject
     
     private readonly IScreenCaptureService _captureService;
     private readonly ILogService _logService;
+    private readonly IInputMonitorService _inputMonitor;
     
     private int _currentSessionId;
 
-    public MainViewModel(IScreenCaptureService captureService, ILogService logService)
+    public MainViewModel(
+        IScreenCaptureService captureService, 
+        ILogService logService, 
+        IInputMonitorService inputMonitor)
     {
         _captureService = captureService;
         _logService = logService;
+        _inputMonitor = inputMonitor;
         
-        _captureService.StatusChanged += (_, msg) =>
+        if (_inputMonitor is InputMonitorService monitor)
         {
-            StatusText = msg;
-        };
-
-        _captureService.RecordingStarted += (_, _) =>
-        {
-            App.Current.Dispatcher.Invoke(() =>
+            monitor.HotkeyStartStop += async (_, _) =>
             {
-                _durationTimer = new System.Timers.Timer(1000);
-                _durationTimer.Elapsed += (_, _) =>
+                await App.Current.Dispatcher.InvokeAsync(async () =>
                 {
-                    App.Current.Dispatcher.Invoke(() =>
-                        RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1)));
-                };
-                _durationTimer.Start();
-            });
-        };
+                    if (IsRecording)
+                        await StopRecordingAsync();
+                    else
+                        await StartRecordingAsync();
+                });
+            };
+        
+            monitor.Start(0);
+        }
+        
+        _captureService.StatusChanged  += (_, msg) => StatusText = msg;
+        _captureService.RecordingStarted += OnRecordingStarted;
     }
 
     [RelayCommand]
@@ -62,6 +68,9 @@ public partial class MainViewModel : ObservableObject
             mode: RecordingMode.Personal,
             videoFilePath: outputPath);
 
+        _inputMonitor.Stop();
+        _inputMonitor.Start(_currentSessionId);
+        
         await _captureService.StartAsync(outputPath);
         IsRecording = true;
 
@@ -78,11 +87,26 @@ public partial class MainViewModel : ObservableObject
             _currentSessionId, "RECORDING_STOP", "Recording stopped");
 
         await _logService.EndSessionAsync(_currentSessionId);
+        
+        _inputMonitor.Stop();
+        _inputMonitor.Start(0);
 
         IsRecording = false;
         _durationTimer?.Stop();
         _durationTimer?.Dispose();
         _durationTimer = null;
         RecordingDuration = TimeSpan.Zero;
+    }
+    
+    private void OnRecordingStarted(object? sender, EventArgs e)
+    {
+        App.Current.Dispatcher.Invoke(() =>
+        {
+            _durationTimer = new System.Timers.Timer(1000);
+            _durationTimer.Elapsed += (_, _) =>
+                App.Current.Dispatcher.Invoke(() =>
+                    RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1)));
+            _durationTimer.Start();
+        });
     }
 }
