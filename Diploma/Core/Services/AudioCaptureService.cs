@@ -65,6 +65,7 @@ public class AudioCaptureService : IAudioCaptureService
     public Task StopAsync()
     {
         if (!_isRecording) return Task.CompletedTask;
+        _isRecording = false;
         _waveIn?.StopRecording();
         return Task.CompletedTask;
     }

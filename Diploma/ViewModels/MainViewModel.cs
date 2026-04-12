@@ -63,7 +63,31 @@ public partial class MainViewModel : ObservableObject
         }
         
         _captureService.StatusChanged  += (_, msg) => StatusText = msg;
-        _captureService.RecordingStarted += OnRecordingStarted;
+        
+        _captureService.CaptureTargetSelected += async (_, _) =>
+        {
+            if (IsMicEnabled && MicDevices.Count > 0)
+            {
+                _audioCaptureService.SelectedDevice = SelectedMicDevice;
+                await _audioCaptureService.StartAsync(_currentAudioPath);
+
+                await _logService.LogEventAsync(
+                    _currentSessionId, "AUDIO_START",
+                    $"Microphone recording started: {SelectedMicDevice}");
+            }
+        };
+        
+        _captureService.RecordingStarted += (_, _) =>
+        {
+            App.Current.Dispatcher.Invoke(() =>
+            {
+                _durationTimer = new System.Timers.Timer(1000);
+                _durationTimer.Elapsed += (_, _) =>
+                    App.Current.Dispatcher.Invoke(() =>
+                        RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1)));
+                _durationTimer.Start();
+            });
+        };
     }
 
     [RelayCommand]

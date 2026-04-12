@@ -41,6 +41,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     
     public event EventHandler<string>? StatusChanged;
     public event EventHandler? RecordingStarted;
+    public event EventHandler? CaptureTargetSelected;
 
     public Task StartAsync(string outputPath, CancellationToken ct = default)
     {
@@ -91,6 +92,8 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                 _isRecording = false;
                 return;
             }
+            
+            CaptureTargetSelected?.Invoke(this, EventArgs.Empty);
 
             Log("Recording started");
             

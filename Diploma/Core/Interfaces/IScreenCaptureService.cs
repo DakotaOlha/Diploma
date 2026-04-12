@@ -7,4 +7,5 @@ public interface IScreenCaptureService
     Task StopAsync();
     event EventHandler<string>? StatusChanged;
     event EventHandler? RecordingStarted;
+    event EventHandler? CaptureTargetSelected;
 }
