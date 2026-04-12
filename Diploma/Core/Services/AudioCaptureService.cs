@@ -5,82 +5,77 @@ namespace Diploma.Core.Services;
 
 public class AudioCaptureService : IAudioCaptureService
 {
-    private WaveInEvent? _waveIn;
-    private WaveFileWriter? _writer;
-    private string? _outputPath;
-    private volatile bool _isRecording;
+    private const int SampleRate = 44100;
+    private const int Channels   = 1;
+    
+    private readonly object _stateLock = new();
     private readonly object _writeLock = new();
     
-    public bool IsRecording => _isRecording;
+    private WaveInEvent? _waveIn;
+    private WaveFileWriter? _writer;
+    private bool _isRecording;
+    private bool _disposed;
     
+    public bool IsRecording => _isRecording;
     public string? SelectedDevice { get; set; }
-
+    
     public IReadOnlyList<string> GetAvailableDevices()
     {
-        var devices = new List<string>();
-        for (int i = 0; i < WaveInEvent.DeviceCount; i++)
-        {
-            var caps = WaveInEvent.GetCapabilities(i);
-            devices.Add(caps.ProductName);
-        }
-        return devices;
-    }
-
-    private int GetDeviceIndex()
-    {
-        if (SelectedDevice is null) return 0;
-
-        for (int i = 0; i < WaveInEvent.DeviceCount; i++)
-        {
-            if (WaveInEvent.GetCapabilities(i).ProductName == SelectedDevice)
-                return i;
-        }
-
-        return 0;
+        return Enumerable.Range(0, WaveInEvent.DeviceCount)
+            .Select(i => WaveInEvent.GetCapabilities(i).ProductName)
+            .ToList();
     }
 
     public Task StartAsync(string outputPath, CancellationToken ct = default)
     {
-        if (_isRecording) return Task.CompletedTask;
-
-        _outputPath = outputPath;
-
-        _waveIn = new WaveInEvent
+        lock (_stateLock)
         {
-            DeviceNumber = GetDeviceIndex(),
-            WaveFormat = new WaveFormat(44100, 1)
-        };
-        
-        _writer = new WaveFileWriter(_outputPath, _waveIn.WaveFormat);
+            if (_isRecording) return Task.CompletedTask;
+            _isRecording = true;
+        }
 
-        _waveIn.DataAvailable += OnDataAvailable;
-        _waveIn.RecordingStopped += OnRecordingStopped;
-        
-        _waveIn.StartRecording();
-        _isRecording = true;
+        try
+        {
+            int deviceIndex = GetDeviceIndex();
+
+            _waveIn = new WaveInEvent
+            {
+                DeviceNumber = deviceIndex,
+                WaveFormat = new WaveFormat(SampleRate, Channels)
+            };
+
+            _waveIn.DataAvailable += OnDataAvailable;
+            _waveIn.RecordingStopped += OnRecordingStopped;
+
+            _writer = new WaveFileWriter(outputPath, _waveIn.WaveFormat);
+
+            _waveIn.StartRecording();
+        }
+        catch (Exception)
+        {
+            lock (_stateLock) _isRecording = false;
+            Cleanup();
+            throw;
+        }
         
         return Task.CompletedTask;
     }
 
     public Task StopAsync()
     {
-        if (!_isRecording) return Task.CompletedTask;
-        _isRecording = false;
-        _waveIn?.StopRecording();
+        if (_isRecording)
+        {
+            _waveIn?.StopRecording();
+            _isRecording = false;
+        }
+
         return Task.CompletedTask;
     }
-
-    public void Dispose()
-    {
-        _waveIn?.Dispose();
-        _waveIn = null;
-
-        lock (_writeLock)
-        {
-            _writer?.Dispose();
-            _writer = null;
-        }
-    }
+    
+    private int GetDeviceIndex() =>
+        SelectedDevice is null ? 0 :
+            Enumerable.Range(0, WaveInEvent.DeviceCount)
+                .FirstOrDefault(i => WaveInEvent.GetCapabilities(i).ProductName == SelectedDevice);
     
     private void OnDataAvailable(object? sender, WaveInEventArgs e)
     {
@@ -90,16 +85,30 @@ public class AudioCaptureService : IAudioCaptureService
         }
     }
 
-    private void OnRecordingStopped(object? sender, StoppedEventArgs e)
+    private void OnRecordingStopped(object? sender, StoppedEventArgs e) => Cleanup();
+    
+    
+    private void Cleanup()
     {
+        lock (_stateLock)
+        {
+            _waveIn?.Dispose();
+            _waveIn = null;
+        }
+        
         lock (_writeLock)
         {
             _writer?.Flush();
             _writer?.Dispose();
             _writer = null;
         }
-
-        _waveIn?.Dispose();
-        _waveIn = null;
+    }
+    
+    public void Dispose()
+    {
+        if (_disposed) return;
+        Cleanup();
+        _disposed = true;
+        GC.SuppressFinalize(this);
     }
 }
