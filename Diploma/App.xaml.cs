@@ -37,6 +37,7 @@ public partial class App : Application
                 services.AddSingleton<ILogService>(_ => new LogService(connStr));
 
                 services.AddSingleton<IInputMonitorService, InputMonitorService>();
+                services.AddSingleton<IAudioCaptureService, AudioCaptureService>();
                 services.AddSingleton<IScreenCaptureService, ScreenCaptureService>();
                 services.AddSingleton<MainViewModel>();
                 services.AddSingleton<MainWindow>();
