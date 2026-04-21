@@ -40,6 +40,7 @@ public partial class App : Application
                 services.AddSingleton<IAudioCaptureService, AudioCaptureService>();
                 services.AddSingleton<IScreenCaptureService, ScreenCaptureService>();
                 services.AddSingleton<MainViewModel>();
+                services.AddSingleton<OverlayWindow>();
                 services.AddSingleton<MainWindow>();
             })
             .Build();
@@ -51,6 +52,9 @@ public partial class App : Application
         
         base.OnStartup(e);
     }
+    
+    public OverlayWindow GetOverlay() => 
+        _host.Services.GetRequiredService<OverlayWindow>();
 
     protected override async void OnExit(ExitEventArgs e)
     {
