@@ -57,6 +57,16 @@ public class LogService : ILogService
         
         _sessionStarts.Remove(sessionId);
     }
+    
+    public async Task DeleteSessionAsync(int sessionId)
+    {
+        const string sql = "DELETE FROM RecordingSessions WHERE Id = @Id";
+     
+        using var conn = CreateConnection();
+        await conn.ExecuteAsync(sql, new { Id = sessionId });
+     
+        _sessionStarts.Remove(sessionId);
+    }
 
     public async Task<RecordingSession?> GetSessionAsync(int sessionId)
     {

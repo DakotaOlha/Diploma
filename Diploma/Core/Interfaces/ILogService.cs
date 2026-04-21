@@ -6,6 +6,7 @@ public interface ILogService
 {
     Task<int> StartSessionAsync(string name, RecordingMode mode, string videoFilePath);
     Task EndSessionAsync(int sessionId);
+    Task DeleteSessionAsync(int sessionId);
     Task<RecordingSession?> GetSessionAsync(int sessionId);
     Task<IReadOnlyList<RecordingSession>> GetAllSessionsAsync();
 
