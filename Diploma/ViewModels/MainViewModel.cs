@@ -64,29 +64,29 @@ public partial class MainViewModel : ObservableObject
         
         _captureService.StatusChanged  += (_, msg) => StatusText = msg;
         
-        _captureService.CaptureTargetSelected += async (_, _) =>
+        _captureService.RecordingStarted += async (_, _) =>
         {
+            _durationTimer = new System.Timers.Timer(1000);
+            _durationTimer.Elapsed += (_, _) =>
+                App.Current.Dispatcher.Invoke(() =>
+                    RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1)));
+            _durationTimer.Start();
+
             if (IsMicEnabled && MicDevices.Count > 0)
             {
-                _audioCaptureService.SelectedDevice = SelectedMicDevice;
-                await _audioCaptureService.StartAsync(_currentAudioPath);
-
-                await _logService.LogEventAsync(
-                    _currentSessionId, "AUDIO_START",
-                    $"Microphone recording started: {SelectedMicDevice}");
+                try
+                {
+                    _audioCaptureService.SelectedDevice = SelectedMicDevice;
+                    await _audioCaptureService.StartAsync(_currentAudioPath);
+                    await _logService.LogEventAsync(
+                        _currentSessionId, "AUDIO_START",
+                        $"Microphone recording started: {SelectedMicDevice}");
+                }
+                catch (Exception ex)
+                {
+                    StatusText = "Audio Error: " + ex.Message;
+                }
             }
-        };
-        
-        _captureService.RecordingStarted += (_, _) =>
-        {
-            App.Current.Dispatcher.Invoke(() =>
-            {
-                _durationTimer = new System.Timers.Timer(1000);
-                _durationTimer.Elapsed += (_, _) =>
-                    App.Current.Dispatcher.Invoke(() =>
-                        RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1)));
-                _durationTimer.Start();
-            });
         };
     }
 
@@ -117,6 +117,9 @@ public partial class MainViewModel : ObservableObject
 
         await _logService.LogEventAsync(
             _currentSessionId, "RECORDING_START", "Recording started");
+        
+        App.Current.Dispatcher.Invoke(() =>
+            ((App)App.Current).GetOverlay().Show());
     }
 
     [RelayCommand]
@@ -144,6 +147,8 @@ public partial class MainViewModel : ObservableObject
         _durationTimer?.Dispose();
         _durationTimer = null;
         RecordingDuration = TimeSpan.Zero;
+        App.Current.Dispatcher.Invoke(() =>
+            ((App)App.Current).GetOverlay().Hide());
     }
     
     private async void OnRecordingStarted(object? sender, EventArgs e)
