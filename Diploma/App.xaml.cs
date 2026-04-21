@@ -40,6 +40,8 @@ public partial class App : Application
                 services.AddSingleton<IAudioCaptureService, AudioCaptureService>();
                 services.AddSingleton<IScreenCaptureService, ScreenCaptureService>();
                 services.AddSingleton<MainViewModel>();
+                services.AddSingleton<SessionsViewModel>();
+                services.AddSingleton<SessionsView>();
                 services.AddSingleton<OverlayWindow>();
                 services.AddSingleton<MainWindow>();
             })

@@ -5,9 +5,11 @@ namespace Diploma.Views;
 
 public partial class MainWindow : Window
 {
-    public MainWindow(MainViewModel viewModel)
+    public MainWindow(MainViewModel viewModel, SessionsView sessionsView)
     {
         InitializeComponent();
         DataContext = viewModel;
+        
+        SessionsTab.Content = sessionsView;
     }
 }

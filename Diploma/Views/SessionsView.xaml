@@ -1,0 +1,177 @@
+﻿<UserControl x:Class="Diploma.Views.SessionsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:vm="clr-namespace:Diploma.ViewModels">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+    </UserControl.Resources>
+    
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="260" MinWidth="180"/>
+            <ColumnDefinition Width="4"/>  
+            <ColumnDefinition Width="*"/> 
+        </Grid.ColumnDefinitions>
+
+        <Grid Grid.Column="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0"
+                       Text="Сесії"
+                       FontSize="16" FontWeight="SemiBold"
+                       Margin="12,12,12,8"/>
+
+            <ListBox Grid.Row="1"
+                     ItemsSource="{Binding Sessions}"
+                     SelectedItem="{Binding SelectedSession}"
+                     BorderThickness="0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="4,6">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0"
+                                       Text="{Binding Name}"
+                                       FontWeight="Medium"
+                                       TextTrimming="CharacterEllipsis"/>
+
+                            <Button Grid.Row="0" Grid.Column="1"
+                                    Content="✕"
+                                    FontSize="10"
+                                    Padding="4,1"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Foreground="#888"
+                                    Cursor="Hand"
+                                    Command="{Binding DataContext.DeleteSessionCommand,
+                                              RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                    CommandParameter="{Binding}"/>
+
+                            <TextBlock Grid.Row="1" Grid.ColumnSpan="2"
+                                       FontSize="11" Foreground="#888"
+                                       Text="{Binding StartTime, StringFormat={}{0:dd.MM.yyyy HH:mm}}"/>
+
+                            <Border Grid.Row="2" Grid.ColumnSpan="2"
+                                    Background="#1E88E5" CornerRadius="3"
+                                    HorizontalAlignment="Left"
+                                    Padding="5,1" Margin="0,3,0,0">
+                                <TextBlock Text="{Binding Mode}"
+                                           FontSize="10" Foreground="White"/>
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Grid>
+
+        <GridSplitter Grid.Column="1"
+                      Width="4"
+                      HorizontalAlignment="Stretch"
+                      Background="#22000000"/>
+
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>  
+                <RowDefinition Height="Auto"/>  
+                <RowDefinition Height="*"/>    
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="12,12,12,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="200"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           Text="{Binding SelectedSession.Name, FallbackValue='Виберіть сесію'}"
+                           FontSize="16" FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+
+                <hc:SearchBar Grid.Column="1"
+                              Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                              hc:InfoElement.Placeholder="Пошук подій..."
+                              VerticalAlignment="Center"/>
+            </Grid>
+
+            <TextBlock Grid.Row="2"
+                       Text="← Виберіть сесію зі списку"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontSize="14" Foreground="#888"
+                       Visibility="{Binding HasNoSession,
+                                    Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+            <DataGrid Grid.Row="2"
+                      ItemsSource="{Binding Entries}"
+                      SelectedItem="{Binding SelectedEntry}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column"
+                      SelectionMode="Single"
+                      BorderThickness="0"
+                      Visibility="{Binding HasSession,
+                                    Converter={StaticResource BooleanToVisibilityConverter}}">
+
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Час"
+                                        Binding="{Binding Offset, StringFormat={}{0:mm\\:ss\\.f}}"
+                                        Width="70"/>
+
+                    <DataGridTextColumn Header="Подія"
+                                        Binding="{Binding EventType}"
+                                        Width="140"/>
+
+                    <DataGridTextColumn Header="Опис"
+                                        Binding="{Binding Description}"
+                                        Width="*"/>
+
+                    <DataGridTextColumn Header="Деталі"
+                                        Binding="{Binding Metadata}"
+                                        Width="150"/>
+
+                    <DataGridTemplateColumn Header="" Width="80">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="▶ Jump"
+                                        FontSize="10"
+                                        Padding="6,2"
+                                        Command="{Binding DataContext.JumpToEntryCommand,
+                                                  RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+
+                <DataGrid.InputBindings>
+                    <MouseBinding MouseAction="LeftDoubleClick"
+                                  Command="{Binding JumpToEntryCommand}"
+                                  CommandParameter="{Binding SelectedEntry}"/>
+                </DataGrid.InputBindings>
+            </DataGrid>
+
+            <hc:LoadingCircle Grid.Row="2"
+                              IsRunning="{Binding IsLoading}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Visibility="{Binding IsLoading,
+                                           Converter={StaticResource BooleanToVisibilityConverter}}"/>
+        </Grid>
+    </Grid>
+</UserControl>
