@@ -172,26 +172,19 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         
         IEnumerable<IVideoFrame> GenerateFrames()
         {
-            byte[]? lastFrame = null;
-            
-            while (lastFrame == null && !stopRequested)
-            {
-                lastFrame = _latestFrame;
-                if (lastFrame == null)
-                    Thread.Sleep(10);
-            }
-            
-            if (lastFrame == null) yield break;
-            
-            if (!firstFrameFired)
-            {
-                firstFrameFired = true;
-                RecordingStarted?.Invoke(this, EventArgs.Empty);
-            }
-            
-            var startTime = DateTime.UtcNow;
+            while (_latestFrame == null && !stopRequested)
+                Thread.Sleep(10);
+
+            if (_latestFrame == null) yield break;
+
+            RecordingStarted?.Invoke(this, EventArgs.Empty);
+
+            byte[] lastFrame = _latestFrame;
+    
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             long frameIndex = 0;
-            
+            double frameDuration = 1000.0 / TargetFrameRate;
+
             while (!stopRequested)
             {
                 var current = _latestFrame;
@@ -199,14 +192,14 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                     lastFrame = current;
 
                 yield return new BgraVideoFrame(lastFrame, width, height);
-
                 frameIndex++;
 
-                var nextFrameTime = startTime + TimeSpan.FromSeconds(frameIndex / (double)TargetFrameRate);
-                var sleepTime = nextFrameTime - DateTime.UtcNow;
+                double targetMs = frameIndex * frameDuration;
+                double currentMs = sw.Elapsed.TotalMilliseconds;
+                double sleepMs = targetMs - currentMs;
 
-                if (sleepTime > TimeSpan.Zero)
-                    Thread.Sleep(sleepTime);
+                if (sleepMs > 1)
+                    Thread.Sleep((int)sleepMs);
             }
         }
         
