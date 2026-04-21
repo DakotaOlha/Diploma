@@ -9,6 +9,7 @@ namespace Diploma.ViewModels;
 public partial class SessionsViewModel : ObservableObject
 {
     private readonly ILogService _logService;
+    private readonly PlayerViewModel _playerViewModel;
     
     public bool HasSession => SelectedSession is not null;
     public bool HasNoSession => SelectedSession is null;
@@ -32,16 +33,21 @@ public partial class SessionsViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HasSession));
         OnPropertyChanged(nameof(HasNoSession));
-
+ 
         if (value is not null)
+        {
             _ = LoadEntriesAsync(value.Id);
+ 
+            _ = _playerViewModel.OpenSessionAsync(value);
+        }
     }
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
 
-    public SessionsViewModel(ILogService logService)
+    public SessionsViewModel(ILogService logService, PlayerViewModel playerViewModel)
     {
         _logService = logService;
+        _playerViewModel = playerViewModel;
     }
 
     [RelayCommand]
@@ -117,6 +123,6 @@ public partial class SessionsViewModel : ObservableObject
     private void JumpToEntry(LogEntry? entry)
     {
         if (entry is null) return;
-        JumpToRequested?.Invoke(this, entry.Offset);
+        _playerViewModel.JumpTo(entry.Offset);
     }
 }

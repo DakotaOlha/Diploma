@@ -46,5 +46,7 @@
         </TabItem>
         <TabItem Header="📋 Сесії" x:Name="SessionsTab">
         </TabItem>
+        <TabItem Header="▶ Плеєр" x:Name="PlayerTab">
+        </TabItem>
     </TabControl>
 </Window>
