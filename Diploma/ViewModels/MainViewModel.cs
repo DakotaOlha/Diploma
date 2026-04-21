@@ -64,6 +64,12 @@ public partial class MainViewModel : ObservableObject
         
         _captureService.StatusChanged  += (_, msg) => StatusText = msg;
         
+        _captureService.CaptureTargetSelected += (_, _) =>
+        {
+            App.Current.Dispatcher.Invoke(() =>
+                ((App)App.Current).GetOverlay().Show());
+        };
+        
         _captureService.RecordingStarted += async (_, _) =>
         {
             _durationTimer = new System.Timers.Timer(1000);
@@ -117,9 +123,6 @@ public partial class MainViewModel : ObservableObject
 
         await _logService.LogEventAsync(
             _currentSessionId, "RECORDING_START", "Recording started");
-        
-        App.Current.Dispatcher.Invoke(() =>
-            ((App)App.Current).GetOverlay().Show());
     }
 
     [RelayCommand]
