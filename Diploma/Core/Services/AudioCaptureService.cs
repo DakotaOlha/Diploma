@@ -63,11 +63,22 @@ public class AudioCaptureService : IAudioCaptureService
 
     public Task StopAsync()
     {
-        if (_isRecording)
+        lock (_stateLock)
         {
-            _waveIn?.StopRecording();
+            if (!_isRecording) return Task.CompletedTask;
             _isRecording = false;
         }
+        
+        if (_waveIn != null)
+        {
+            _waveIn.DataAvailable -= OnDataAvailable;
+            _waveIn.RecordingStopped -= OnRecordingStopped;
+        
+            try { _waveIn.StopRecording(); }
+            catch { }
+        }
+
+        Cleanup();
 
         return Task.CompletedTask;
     }
@@ -85,7 +96,7 @@ public class AudioCaptureService : IAudioCaptureService
         }
     }
 
-    private void OnRecordingStopped(object? sender, StoppedEventArgs e) => Cleanup();
+    private void OnRecordingStopped(object? sender, StoppedEventArgs e) { }
     
     
     private void Cleanup()
