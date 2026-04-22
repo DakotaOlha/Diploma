@@ -50,40 +50,63 @@ public partial class PlayerViewModel : ObservableObject, IDisposable
         foreach (var e in entries)
             Entries.Add(e);
 
-        MediaPlayer.Stop();
+        await Task.Run(() => MediaPlayer.Stop());
+
         if (!File.Exists(session.VideoFilePath))
         {
             HasMedia = false;
             return;
         }
 
-        using var media = new Media(_libVlc, session.VideoFilePath, FromType.FromPath);
+        var oldMedia = MediaPlayer.Media;
+
+        var media = new Media(_libVlc, session.VideoFilePath, FromType.FromPath);
+        await media.Parse(MediaParseOptions.ParseLocal);
+
+        DurationMs = media.Duration;
+        UpdateTimeLabel(0, DurationMs);
+
         MediaPlayer.Media = media;
+    
+        oldMedia?.Dispose();
 
         HasMedia = true;
-
-        await media.Parse(MediaParseOptions.ParseLocal);
-        DurationMs = media.Duration;
-        UpdateTimeLabel(0, media.Duration);
     }
 
     public void JumpTo(TimeSpan offset)
     {
         if (!HasMedia) return;
 
-        if (MediaPlayer.IsPlaying)
-            MediaPlayer.Time = (long)offset.TotalMilliseconds;
-        else
-        {
-            void OnPlaying(object? s, EventArgs e)
-            {
-                MediaPlayer.Playing -= OnPlaying;
-                MediaPlayer.Time = (long)offset.TotalMilliseconds;
-            }
+        var ms = (long)offset.TotalMilliseconds;
 
-            MediaPlayer.Playing += OnPlaying;
-            MediaPlayer.Play();
+        if (!MediaPlayer.IsSeekable)
+        {
+            MediaPlayer.Stop();
         }
+
+        if (MediaPlayer.IsPlaying)
+        {
+            MediaPlayer.Time = ms;
+            return;
+        }
+
+        Task.Run(async () =>
+        {
+            MediaPlayer.Play();
+        
+            var timeout = DateTime.Now.AddSeconds(3);
+            while (!MediaPlayer.IsPlaying && DateTime.Now < timeout)
+                await Task.Delay(50);
+
+            if (MediaPlayer.IsPlaying)
+            {
+                await Task.Delay(100); 
+                MediaPlayer.Time = ms;
+            
+                await Task.Delay(50);
+                MediaPlayer.Pause();
+            }
+        });
     }
 
     [RelayCommand]

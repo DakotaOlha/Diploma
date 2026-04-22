@@ -121,6 +121,17 @@ public partial class SessionsViewModel : ObservableObject
     private void JumpToEntry(LogEntry? entry)
     {
         if (entry is null) return;
+    
+        if (_playerViewModel.CurrentSession?.Id != SelectedSession?.Id 
+            && SelectedSession is not null)
+        {
+            _ = _playerViewModel.OpenSessionAsync(SelectedSession);
+        }
+    
         _playerViewModel.JumpTo(entry.Offset);
+    
+        NavigateToPlayer?.Invoke();
     }
+    
+    public event Action? NavigateToPlayer;
 }
