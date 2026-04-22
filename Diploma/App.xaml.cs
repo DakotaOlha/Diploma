@@ -42,6 +42,8 @@ public partial class App : Application
                 services.AddSingleton<MainViewModel>();
                 services.AddSingleton<SessionsViewModel>();
                 services.AddSingleton<SessionsView>();
+                services.AddSingleton<PlayerViewModel>();
+                services.AddSingleton<PlayerView>();
                 services.AddSingleton<OverlayWindow>();
                 services.AddSingleton<MainWindow>();
             })

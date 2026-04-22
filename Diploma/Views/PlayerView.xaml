@@ -1,0 +1,166 @@
+﻿<UserControl x:Class="Diploma.Views.PlayerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>  
+            <RowDefinition Height="Auto"/> 
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>  
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0" Background="#FF111111">
+
+                <vlc:VideoView x:Name="VideoView"
+                               HorizontalAlignment="Stretch"
+                               VerticalAlignment="Stretch"/>
+
+                <TextBlock Text="Відео не знайдено або сесія не вибрана"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="#888" FontSize="14"
+                           Visibility="{Binding HasMedia,
+                                        Converter={StaticResource BoolToVis}}"/>
+            </Grid>
+
+            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
+                          Background="#22000000"/>
+
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0"
+                           Text="Події" FontSize="14" FontWeight="Medium"
+                           Margin="12,8,12,6"/>
+
+                <DataGrid Grid.Row="1"
+                          x:Name="EntriesGrid"
+                          ItemsSource="{Binding Entries}"
+                          SelectedItem="{Binding ActiveEntry}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          GridLinesVisibility="Horizontal"
+                          HeadersVisibility="Column"
+                          SelectionMode="Single"
+                          BorderThickness="0"
+                          EnableRowVirtualization="True">
+
+                    <DataGrid.RowStyle>
+                        <Style TargetType="DataGridRow">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                    <Setter Property="Background" Value="#1A1E88E5"/>
+                                    <Setter Property="FontWeight" Value="Medium"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </DataGrid.RowStyle>
+
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Час"
+                                            Binding="{Binding Offset, StringFormat={}{0:mm\\:ss}}"
+                                            Width="55"/>
+                        <DataGridTextColumn Header="Подія"
+                                            Binding="{Binding EventType}"
+                                            Width="130"/>
+                        <DataGridTextColumn Header="Опис"
+                                            Binding="{Binding Description}"
+                                            Width="*"/>
+
+                        <DataGridTemplateColumn Width="65">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="▶ Jump"
+                                            FontSize="10" Padding="4,2"
+                                            Command="{Binding DataContext.JumpToEntryCommand,
+                                                      RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                            CommandParameter="{Binding}"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="1"
+                BorderThickness="0,1,0,0"
+                BorderBrush="#22000000"
+                Padding="12,8">
+            <StackPanel>
+
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Slider Grid.Column="0"
+                            x:Name="SeekSlider"
+                            Minimum="0"
+                            Maximum="{Binding DurationMs}"
+                            Value="{Binding PositionMs, Mode=OneWay}"
+                            IsEnabled="{Binding HasMedia}"
+                            VerticalAlignment="Center"
+                            Thumb.DragCompleted="SeekSlider_DragCompleted"
+                            PreviewMouseLeftButtonUp="SeekSlider_MouseUp"/>
+
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding TimeLabel}"
+                               FontFamily="Consolas" FontSize="13"
+                               VerticalAlignment="Center"
+                               Margin="12,0,0,0" Foreground="#666"/>
+                </Grid>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+
+                    <Button Content="⏮"
+                            FontSize="16" Width="40" Height="34"
+                            Command="{Binding StopCommand}"
+                            ToolTip="Стоп / на початок"
+                            Margin="0,0,4,0"/>
+
+                    <Button x:Name="PlayPauseBtn"
+                            FontSize="16" Width="56" Height="34"
+                            Command="{Binding PlayPauseCommand}"
+                            IsEnabled="{Binding HasMedia}"
+                            Margin="0,0,4,0">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Content" Value="▶"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                        <Setter Property="Content" Value="⏸"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <TextBlock Text="🔊" VerticalAlignment="Center" Margin="12,0,4,0"/>
+                    <Slider Minimum="0" Maximum="200"
+                            Value="{Binding Volume}"
+                            Width="80" VerticalAlignment="Center"
+                            ToolTip="Гучність (100 = оригінал)"/>
+                </StackPanel>
+
+            </StackPanel>
+        </Border>
+
+    </Grid>
+</UserControl>
