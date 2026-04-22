@@ -139,6 +139,11 @@ public class LogService : ILogService
         return rows.Select(MapEntry).ToList();
     }
     
+    public void AdjustSessionStart(int sessionId, DateTime realStart)
+    {
+        _sessionStarts[sessionId] = realStart;
+    }
+    
     private SqliteConnection CreateConnection()
     {
         var conn = new SqliteConnection(_connectionString);

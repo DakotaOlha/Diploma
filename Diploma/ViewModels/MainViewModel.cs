@@ -72,6 +72,8 @@ public partial class MainViewModel : ObservableObject
         
         _captureService.RecordingStarted += async (_, _) =>
         {
+            _logService.AdjustSessionStart(_currentSessionId, DateTime.UtcNow);
+            
             _durationTimer = new System.Timers.Timer(1000);
             _durationTimer.Elapsed += (_, _) =>
                 App.Current.Dispatcher.Invoke(() =>
@@ -84,9 +86,6 @@ public partial class MainViewModel : ObservableObject
                 {
                     _audioCaptureService.SelectedDevice = SelectedMicDevice;
                     await _audioCaptureService.StartAsync(_currentAudioPath);
-                    await _logService.LogEventAsync(
-                        _currentSessionId, "AUDIO_START",
-                        $"Microphone recording started: {SelectedMicDevice}");
                 }
                 catch (Exception ex)
                 {
@@ -120,9 +119,6 @@ public partial class MainViewModel : ObservableObject
         await _captureService.StartAsync(videoPath);
 
         IsRecording = true;
-
-        await _logService.LogEventAsync(
-            _currentSessionId, "RECORDING_START", "Recording started");
     }
 
     [RelayCommand]
@@ -133,12 +129,7 @@ public partial class MainViewModel : ObservableObject
         if (_audioCaptureService.IsRecording)
         {
             await _audioCaptureService.StopAsync();
-            await _logService.LogEventAsync(
-                _currentSessionId, "AUDIO_STOP", "Microphone recording stopped");
         }
-
-        await _logService.LogEventAsync(
-            _currentSessionId, "RECORDING_STOP", "Recording stopped");
 
         await _logService.EndSessionAsync(_currentSessionId);
 
@@ -171,10 +162,6 @@ public partial class MainViewModel : ObservableObject
                 {
                     _audioCaptureService.SelectedDevice = SelectedMicDevice;
                     await _audioCaptureService.StartAsync(_currentAudioPath);
-
-                    await _logService.LogEventAsync(
-                        _currentSessionId, "AUDIO_START",
-                        $"Microphone recording started: {SelectedMicDevice}");
                 }
                 catch (Exception ex)
                 {

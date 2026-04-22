@@ -9,6 +9,8 @@ public interface ILogService
     Task DeleteSessionAsync(int sessionId);
     Task<RecordingSession?> GetSessionAsync(int sessionId);
     Task<IReadOnlyList<RecordingSession>> GetAllSessionsAsync();
+    
+    void AdjustSessionStart(int sessionId, DateTime realStart);
 
     Task LogEventAsync(int sessionId, string eventType,
         string description, string? metadata = null);
