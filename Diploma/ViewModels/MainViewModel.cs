@@ -86,9 +86,6 @@ public partial class MainViewModel : ObservableObject
                 {
                     _audioCaptureService.SelectedDevice = SelectedMicDevice;
                     await _audioCaptureService.StartAsync(_currentAudioPath);
-                    await _logService.LogEventAsync(
-                        _currentSessionId, "AUDIO_START",
-                        $"Microphone recording started: {SelectedMicDevice}");
                 }
                 catch (Exception ex)
                 {
@@ -122,9 +119,6 @@ public partial class MainViewModel : ObservableObject
         await _captureService.StartAsync(videoPath);
 
         IsRecording = true;
-
-        await _logService.LogEventAsync(
-            _currentSessionId, "RECORDING_START", "Recording started");
     }
 
     [RelayCommand]
@@ -135,12 +129,7 @@ public partial class MainViewModel : ObservableObject
         if (_audioCaptureService.IsRecording)
         {
             await _audioCaptureService.StopAsync();
-            await _logService.LogEventAsync(
-                _currentSessionId, "AUDIO_STOP", "Microphone recording stopped");
         }
-
-        await _logService.LogEventAsync(
-            _currentSessionId, "RECORDING_STOP", "Recording stopped");
 
         await _logService.EndSessionAsync(_currentSessionId);
 
@@ -173,10 +162,6 @@ public partial class MainViewModel : ObservableObject
                 {
                     _audioCaptureService.SelectedDevice = SelectedMicDevice;
                     await _audioCaptureService.StartAsync(_currentAudioPath);
-
-                    await _logService.LogEventAsync(
-                        _currentSessionId, "AUDIO_START",
-                        $"Microphone recording started: {SelectedMicDevice}");
                 }
                 catch (Exception ex)
                 {

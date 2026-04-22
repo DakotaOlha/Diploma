@@ -79,6 +79,10 @@ public partial class PlayerViewModel : ObservableObject, IDisposable
 
         var ms = (long)offset.TotalMilliseconds;
 
+        ms = Math.Max(0, ms);
+        if (DurationMs > 0)
+            ms = Math.Min(ms, DurationMs - 500);
+        
         if (MediaPlayer.IsPlaying)
         {
             MediaPlayer.Time = ms;
