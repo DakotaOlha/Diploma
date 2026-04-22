@@ -72,6 +72,8 @@ public partial class MainViewModel : ObservableObject
         
         _captureService.RecordingStarted += async (_, _) =>
         {
+            _logService.AdjustSessionStart(_currentSessionId, DateTime.UtcNow);
+            
             _durationTimer = new System.Timers.Timer(1000);
             _durationTimer.Elapsed += (_, _) =>
                 App.Current.Dispatcher.Invoke(() =>

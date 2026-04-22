@@ -71,10 +71,19 @@ public partial class PlayerViewModel : ObservableObject, IDisposable
     {
         if (!HasMedia) return;
 
-        if (!MediaPlayer.IsPlaying)
-            MediaPlayer.Play();
+        if (MediaPlayer.IsPlaying)
+            MediaPlayer.Time = (long)offset.TotalMilliseconds;
+        else
+        {
+            void OnPlaying(object? s, EventArgs e)
+            {
+                MediaPlayer.Playing -= OnPlaying;
+                MediaPlayer.Time = (long)offset.TotalMilliseconds;
+            }
 
-        MediaPlayer.Time = (long)offset.TotalMilliseconds;
+            MediaPlayer.Playing += OnPlaying;
+            MediaPlayer.Play();
+        }
     }
 
     [RelayCommand]

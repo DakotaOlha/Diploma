@@ -117,8 +117,6 @@ public partial class SessionsViewModel : ObservableObject
         }
     }
 
-    public event EventHandler<TimeSpan>? JumpToRequested;
-
     [RelayCommand]
     private void JumpToEntry(LogEntry? entry)
     {
