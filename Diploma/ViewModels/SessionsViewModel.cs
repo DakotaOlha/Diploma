@@ -118,18 +118,17 @@ public partial class SessionsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void JumpToEntry(LogEntry? entry)
+    private async void JumpToEntry(LogEntry? entry)
     {
         if (entry is null) return;
     
         if (_playerViewModel.CurrentSession?.Id != SelectedSession?.Id 
             && SelectedSession is not null)
         {
-            _ = _playerViewModel.OpenSessionAsync(SelectedSession);
+            await _playerViewModel.OpenSessionAsync(SelectedSession);
         }
     
         _playerViewModel.JumpTo(entry.Offset);
-    
         NavigateToPlayer?.Invoke();
     }
     

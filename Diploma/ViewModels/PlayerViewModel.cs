@@ -79,34 +79,49 @@ public partial class PlayerViewModel : ObservableObject, IDisposable
 
         var ms = (long)offset.TotalMilliseconds;
 
-        if (!MediaPlayer.IsSeekable)
-        {
-            MediaPlayer.Stop();
-        }
-
         if (MediaPlayer.IsPlaying)
         {
             MediaPlayer.Time = ms;
             return;
         }
 
+        var tcs = new TaskCompletionSource<bool>();
+
+        void OnPlaying(object? s, EventArgs e)
+        {
+            MediaPlayer.Playing -= OnPlaying;
+            tcs.TrySetResult(true);
+        }
+
+        void OnError(object? s, EventArgs e)
+        {
+            MediaPlayer.EncounteredError -= OnError;
+            tcs.TrySetResult(false);
+        }
+
+        MediaPlayer.Playing += OnPlaying;
+        MediaPlayer.EncounteredError += OnError;
+        MediaPlayer.Play();
+
         Task.Run(async () =>
         {
-            MediaPlayer.Play();
-        
-            var timeout = DateTime.Now.AddSeconds(3);
-            while (!MediaPlayer.IsPlaying && DateTime.Now < timeout)
-                await Task.Delay(50);
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(3000));
 
-            if (MediaPlayer.IsPlaying)
+            if (completed == tcs.Task && tcs.Task.Result)
             {
-                await Task.Delay(100); 
+                await Task.Delay(200);
                 MediaPlayer.Time = ms;
-            
-                await Task.Delay(50);
+                await Task.Delay(100);
                 MediaPlayer.Pause();
             }
         });
+    }
+    
+    [RelayCommand]
+    private void JumpToEntry(LogEntry? entry)
+    {
+        if (entry is null) return;
+        JumpTo(entry.Offset);
     }
 
     [RelayCommand]
