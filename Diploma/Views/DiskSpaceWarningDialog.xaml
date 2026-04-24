@@ -1,0 +1,45 @@
+﻿<Window x:Class="Diploma.Views.DiskSpaceWarningDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Попередження про місце на диску"
+        Width="420" Height="220"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        WindowStyle="ToolWindow"
+        Topmost="True">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+            <TextBlock Text="⚠️" FontSize="24" VerticalAlignment="Center"
+                       Margin="0,0,10,0"/>
+            <TextBlock Text="Мало місця на диску"
+                       FontSize="16" FontWeight="SemiBold"
+                       VerticalAlignment="Center"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1">
+            <TextBlock x:Name="FreeSpaceText"
+                       Margin="0,0,0,6" TextWrapping="Wrap"/>
+            <TextBlock x:Name="EstimatedText"
+                       Margin="0,0,0,6" TextWrapping="Wrap"/>
+            <TextBlock Text="Рекомендуємо звільнити місце перед записом."
+                       Opacity="0.6" FontSize="11" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button Content="Скасувати"
+                    Width="100" Margin="0,0,8,0"
+                    Click="CancelButton_Click"/>
+            <Button Content="▶ Все одно записувати"
+                    Width="160"
+                    Click="ContinueButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

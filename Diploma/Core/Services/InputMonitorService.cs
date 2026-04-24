@@ -1,12 +1,16 @@
 ﻿using Diploma.Core.Interfaces;
 using Gma.System.MouseKeyHook;
 using System.Windows.Forms;
+using Diploma.Core.Models;
 
 namespace Diploma.Core.Services;
 
 public class InputMonitorService : IInputMonitorService
 {
     private const int IdleThresholdMinutes = 5;
+    
+    private ModeProfile _currentProfile;
+    private readonly ModeProfileService _profileService;
     
     private readonly ILogService _logService;
     private readonly InputProcessorService _processor;
@@ -21,11 +25,14 @@ public class InputMonitorService : IInputMonitorService
     private bool _isRunning;
 
     public event EventHandler? HotkeyStartStop;
+    public event EventHandler? HotkeyMarker;
     
-    public InputMonitorService(ILogService logService)
+    public InputMonitorService(ILogService logService, ModeProfileService profileService)
     {
-        _logService = logService;
-        _processor = new InputProcessorService(logService);
+        _logService     = logService;
+        _profileService = profileService;
+        _processor      = new InputProcessorService(logService, profileService);
+        _currentProfile = profileService.GetProfile(RecordingMode.Personal);
     }
 
     public bool IsRunning => _isRunning;
@@ -46,6 +53,12 @@ public class InputMonitorService : IInputMonitorService
 
         _idleTimer = new System.Threading.Timer(CheckIdle, null, 10000, 30000);
     }
+    
+    public void SetMode(RecordingMode mode)
+    {
+        _currentProfile = _profileService.GetProfile(mode);
+        _processor.SetMode(mode);
+    }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
@@ -57,6 +70,12 @@ public class InputMonitorService : IInputMonitorService
         if (_ctrlDown && _shiftDown && e.KeyCode == Keys.R)
         {
             HotkeyStartStop?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+        
+        if (_ctrlDown && _shiftDown && e.KeyCode == Keys.M)
+        {
+            HotkeyMarker?.Invoke(this, EventArgs.Empty);
             return;
         }
 
@@ -75,18 +94,21 @@ public class InputMonitorService : IInputMonitorService
         if (_idleLogged)
         {
             _idleLogged = false;
-            _ = _logService.LogEventAsync(_sessionId, "IDLE_END", "User returned");
+            if (_currentProfile.IsAllowed(EventTypes.IdleEnd))
+                _ = _logService.LogEventAsync(_sessionId, EventTypes.IdleEnd, "User returned");
         }
     }
 
     private void CheckIdle(object? state)
     {
         if (!_isRunning || _idleLogged) return;
+        if (!_currentProfile.IsAllowed(EventTypes.IdleStart)) return;
 
         if ((DateTime.UtcNow - _lastActivityTime).TotalMinutes >= IdleThresholdMinutes)
         {
             _idleLogged = true;
-            _ = _logService.LogEventAsync(_sessionId, "IDLE_START", $"Idle for {IdleThresholdMinutes}m");
+            _ = _logService.LogEventAsync(
+                _sessionId, EventTypes.IdleStart, $"Idle for {IdleThresholdMinutes}m");
         }
     }
 
