@@ -25,6 +25,7 @@ public class InputMonitorService : IInputMonitorService
     private bool _isRunning;
 
     public event EventHandler? HotkeyStartStop;
+    public event EventHandler? HotkeyMarker;
     
     public InputMonitorService(ILogService logService, ModeProfileService profileService)
     {
@@ -69,6 +70,12 @@ public class InputMonitorService : IInputMonitorService
         if (_ctrlDown && _shiftDown && e.KeyCode == Keys.R)
         {
             HotkeyStartStop?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+        
+        if (_ctrlDown && _shiftDown && e.KeyCode == Keys.M)
+        {
+            HotkeyMarker?.Invoke(this, EventArgs.Empty);
             return;
         }
 
