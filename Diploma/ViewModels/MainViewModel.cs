@@ -139,6 +139,9 @@ public partial class MainViewModel : ObservableObject
         
         _currentAudioPath = Path.Combine(sessionDir, "audio.wav");
 
+        App.Current.Dispatcher.Invoke(() =>
+            ((App)App.Current).GetOverlay().SetOutputPath(videoPath));
+        
         _currentSessionId = await _logService.StartSessionAsync(
             name: $"Session {DateTime.Now:dd.MM.yyyy HH:mm}",
             mode: mode,
