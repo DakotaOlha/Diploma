@@ -39,6 +39,8 @@ public partial class PlayerViewModel : ObservableObject, IDisposable
         MediaPlayer = new MediaPlayer(_libVlc);
 
         SubscribeToPlayerEvents();
+        
+        MediaPlayer.Volume = (int)_volume;
     }
 
     public async Task OpenSessionAsync(RecordingSession session)
@@ -224,5 +226,10 @@ public partial class PlayerViewModel : ObservableObject, IDisposable
         _libVlc.Dispose();
 
         GC.SuppressFinalize(this);
+    }
+    
+    partial void OnVolumeChanged(float value)
+    {
+        MediaPlayer.Volume = (int)value;
     }
 }
