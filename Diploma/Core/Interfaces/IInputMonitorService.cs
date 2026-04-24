@@ -8,4 +8,5 @@ public interface IInputMonitorService : IDisposable
     void Start(int sessionId);
     void Stop();
     void SetMode(RecordingMode mode);
+    event EventHandler? HotkeyMarker;
 }

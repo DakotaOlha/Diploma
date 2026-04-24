@@ -111,6 +111,12 @@ public partial class OverlayWindow : Window
         if (e.ButtonState == MouseButtonState.Pressed)
             DragMove();
     }
+    
+    private void MarkerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+            _ = vm.AddMarkerCommand.ExecuteAsync(null);
+    }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Hide();
 }

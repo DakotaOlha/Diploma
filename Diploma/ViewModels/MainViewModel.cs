@@ -4,11 +4,14 @@ using CommunityToolkit.Mvvm.Input;
 using Diploma.Core.Interfaces;
 using Diploma.Core.Models;
 using Diploma.Core.Services;
+using Diploma.Views;
 
 namespace Diploma.ViewModels;
 
 public partial class MainViewModel : ObservableObject
 {
+    public bool CanSelectMode => !IsRecording;
+    public bool CanAddMarker => IsRecording;
 
     [ObservableProperty] private bool _isRecording;
 
@@ -22,6 +25,8 @@ public partial class MainViewModel : ObservableObject
     private readonly ILogService _logService;
     private readonly IInputMonitorService _inputMonitor;
     private readonly IAudioCaptureService _audioCaptureService;
+    private readonly ModeProfileService _profileService;
+    private readonly DiskSpaceService _diskSpaceService;
     
     private string _currentAudioPath = string.Empty;
     
@@ -32,23 +37,21 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private IReadOnlyList<ModeProfile> _availableModes = [];
     
     private int _currentSessionId;
-    
-    private readonly ModeProfileService _profileService;
-    
-    public bool CanSelectMode => !IsRecording;
 
     public MainViewModel(
         IScreenCaptureService captureService, 
         ILogService logService, 
         IInputMonitorService inputMonitor,
         IAudioCaptureService audioCaptureService,
-        ModeProfileService profileService)
+        ModeProfileService profileService,
+        DiskSpaceService diskSpaceService)
     {
         _captureService = captureService;
         _logService = logService;
         _inputMonitor = inputMonitor;
         _audioCaptureService = audioCaptureService;
         _profileService = profileService;
+        _diskSpaceService = diskSpaceService;
         
         AvailableModes = _profileService.GetAllProfiles();
         SelectedMode = AvailableModes.First(m => m.Mode == RecordingMode.Personal);
@@ -68,6 +71,12 @@ public partial class MainViewModel : ObservableObject
                     else
                         await StartRecordingAsync();
                 });
+            };
+            
+            monitor.HotkeyMarker += async (_, _) =>
+            {
+                await App.Current.Dispatcher.InvokeAsync(async () =>
+                    await AddMarkerAsync());
             };
         
             monitor.Start(0);
@@ -115,10 +124,19 @@ public partial class MainViewModel : ObservableObject
         var sessionDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
             "AlgoReplay", timestamp);
-
-        Directory.CreateDirectory(sessionDir);
-
+        
         var videoPath = Path.Combine(sessionDir, "screen.mp4");
+        
+        var diskCheck = _diskSpaceService.Check(videoPath);
+        if (!diskCheck.HasEnoughSpace)
+        {
+            var dialog = new DiskSpaceWarningDialog(diskCheck, _diskSpaceService);
+            if (dialog.ShowDialog() != true)
+                return;
+        }
+        
+        Directory.CreateDirectory(sessionDir);
+        
         _currentAudioPath = Path.Combine(sessionDir, "audio.wav");
 
         _currentSessionId = await _logService.StartSessionAsync(
@@ -158,9 +176,27 @@ public partial class MainViewModel : ObservableObject
             ((App)App.Current).GetOverlay().Hide());
     }
     
+    [RelayCommand]
+    private async Task AddMarkerAsync()
+    {
+        if (!IsRecording) return;
+
+        await App.Current.Dispatcher.InvokeAsync(async () =>
+        {
+            var dialog = new MarkerDialog();
+            if (dialog.ShowDialog() != true) return;
+
+            await _logService.LogEventAsync(
+                _currentSessionId,
+                EventTypes.ManualMarker,
+                dialog.MarkerText);
+        });
+    }
+    
     partial void OnIsRecordingChanged(bool value)
     {
         OnPropertyChanged(nameof(CanSelectMode));
+        OnPropertyChanged(nameof(CanAddMarker));
     }
     
     private async void OnRecordingStarted(object? sender, EventArgs e)
