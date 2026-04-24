@@ -39,6 +39,7 @@ public partial class App : Application
                 services.AddSingleton<IInputMonitorService, InputMonitorService>();
                 services.AddSingleton<IAudioCaptureService, AudioCaptureService>();
                 services.AddSingleton<IScreenCaptureService, ScreenCaptureService>();
+                services.AddSingleton<ModeProfileService>();
                 services.AddSingleton<MainViewModel>();
                 services.AddSingleton<SessionsViewModel>();
                 services.AddSingleton<SessionsView>();

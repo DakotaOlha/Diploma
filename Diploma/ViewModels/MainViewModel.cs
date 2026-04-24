@@ -28,19 +28,30 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _isMicEnabled = true;
     [ObservableProperty] private string _selectedMicDevice = string.Empty;
     [ObservableProperty] private IReadOnlyList<string> _micDevices = [];
+    [ObservableProperty] private ModeProfile? _selectedMode;
+    [ObservableProperty] private IReadOnlyList<ModeProfile> _availableModes = [];
     
     private int _currentSessionId;
+    
+    private readonly ModeProfileService _profileService;
+    
+    public bool CanSelectMode => !IsRecording;
 
     public MainViewModel(
         IScreenCaptureService captureService, 
         ILogService logService, 
         IInputMonitorService inputMonitor,
-        IAudioCaptureService audioCaptureService)
+        IAudioCaptureService audioCaptureService,
+        ModeProfileService profileService)
     {
         _captureService = captureService;
         _logService = logService;
         _inputMonitor = inputMonitor;
         _audioCaptureService = audioCaptureService;
+        _profileService = profileService;
+        
+        AvailableModes = _profileService.GetAllProfiles();
+        SelectedMode = AvailableModes.First(m => m.Mode == RecordingMode.Personal);
         
         MicDevices = _audioCaptureService.GetAvailableDevices();
             if (MicDevices.Count > 0)
@@ -98,6 +109,8 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task StartRecordingAsync()
     {
+        var mode = SelectedMode?.Mode ?? RecordingMode.Personal;
+        
         var timestamp  = DateTime.Now.ToString("yyyyMMdd_HHmmss");
         var sessionDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
@@ -110,14 +123,14 @@ public partial class MainViewModel : ObservableObject
 
         _currentSessionId = await _logService.StartSessionAsync(
             name: $"Session {DateTime.Now:dd.MM.yyyy HH:mm}",
-            mode: RecordingMode.Personal,
+            mode: mode,
             videoFilePath: videoPath);
 
         _inputMonitor.Stop();
+        _inputMonitor.SetMode(mode); 
         _inputMonitor.Start(_currentSessionId);
 
         await _captureService.StartAsync(videoPath);
-
         IsRecording = true;
     }
 
@@ -143,6 +156,11 @@ public partial class MainViewModel : ObservableObject
         RecordingDuration = TimeSpan.Zero;
         App.Current.Dispatcher.Invoke(() =>
             ((App)App.Current).GetOverlay().Hide());
+    }
+    
+    partial void OnIsRecordingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanSelectMode));
     }
     
     private async void OnRecordingStarted(object? sender, EventArgs e)
