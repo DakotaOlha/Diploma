@@ -30,6 +30,23 @@
                           Width="200"
                           IsEnabled="{Binding IsMicEnabled}"/>
             </StackPanel>
+            
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,4">
+                <TextBlock Text="Режим:" VerticalAlignment="Center"
+                           Margin="0,0,8,0" Opacity="0.7"/>
+                <ComboBox ItemsSource="{Binding AvailableModes}"
+                          SelectedItem="{Binding SelectedMode}"
+                          DisplayMemberPath="DisplayName"
+                          Width="200"
+                          IsEnabled="{Binding CanSelectMode}"/>
+                    
+                
+            </StackPanel>
+
+            <TextBlock Text="{Binding SelectedMode.Description}"
+                       HorizontalAlignment="Center"
+                       Opacity="0.5" FontSize="11"
+                       Margin="0,0,0,8"/>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <Button Content="▶ Start"
@@ -39,6 +56,12 @@
                 <Button Content="⏹ Stop"
                         Command="{Binding StopRecordingCommand}"
                         Width="100"/>
+                
+                <Button Content="📌 Маркер"
+                        Command="{Binding AddMarkerCommand}"
+                        Width="100"
+                        IsEnabled="{Binding CanAddMarker}"
+                        ToolTip="Додати маркер (Ctrl+Shift+M)"/>
             </StackPanel>
 
         </StackPanel>
