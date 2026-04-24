@@ -201,9 +201,15 @@ public partial class MainViewModel : ObservableObject
         StatusText = "Merging audio + video…";
         var ok = await _mediaMergeService.MergeAsync(videoPath, audioPath, merged);
 
-        StatusText = ok
-            ? $"Saved: {Path.GetFileName(merged)}"
-            : "Merge failed — check logs. Originals are intact.";
+        if (ok)
+        {
+            await _logService.UpdateSessionVideoPathAsync(_currentSessionId, merged);
+            StatusText = $"Saved: {Path.GetFileName(merged)}";
+        }
+        else
+        {
+            StatusText = "Merge failed — check logs. Originals are intact.";
+        }
     }
     
     [RelayCommand]
