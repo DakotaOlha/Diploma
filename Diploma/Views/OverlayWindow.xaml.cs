@@ -2,6 +2,7 @@
 using System.Windows.Input;
 using System.Windows.Media;
 using Diploma.Core.Interfaces;
+using Diploma.Core.Services;
 using Diploma.ViewModels;
 
 namespace Diploma.Views;
@@ -10,6 +11,8 @@ public partial class OverlayWindow : Window
 {
     private readonly IScreenCaptureService _captureService;
     private readonly IAudioCaptureService _audioService;
+    private readonly DiskSpaceService _diskSpaceService;
+    private string _videoOutputPath = string.Empty;
 
     private DateTime? _videoStartTime;
     private DateTime? _audioStartTime;
@@ -20,16 +23,20 @@ public partial class OverlayWindow : Window
         new(Color.FromRgb(0x88, 0x88, 0x88));
     private static readonly SolidColorBrush RedBrush =
         new(Color.FromRgb(0xFF, 0x55, 0x55));
+    private static readonly SolidColorBrush OrangeBrush =
+        new(Color.FromRgb(0xFF, 0xA0, 0x00));
 
     public OverlayWindow(MainViewModel viewModel,
                          IScreenCaptureService captureService,
-                         IAudioCaptureService audioService)
+                         IAudioCaptureService audioService,
+                         DiskSpaceService diskSpaceService)
     {
         InitializeComponent();
         DataContext = viewModel;
 
         _captureService = captureService;
         _audioService = audioService;
+        _diskSpaceService = diskSpaceService;
 
         _captureService.RecordingStarted += (_, _) =>
         {
@@ -46,6 +53,47 @@ public partial class OverlayWindow : Window
         var timer = new System.Timers.Timer(200);
         timer.Elapsed += (_, _) => App.Current.Dispatcher.Invoke(UpdateTimers);
         timer.Start();
+        
+        var diskTimer = new System.Timers.Timer(10_000);
+        diskTimer.Elapsed += (_, _) => App.Current.Dispatcher.Invoke(UpdateDiskInfo);
+        diskTimer.Start();
+        
+        UpdateDiskInfo();
+    }
+    
+    public void SetOutputPath(string path) => _videoOutputPath = path;
+    
+    private void UpdateDiskInfo()
+    {
+        var checkPath = string.IsNullOrEmpty(_videoOutputPath)
+            ? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)
+            : _videoOutputPath;
+
+        try
+        {
+            var result = _diskSpaceService.Check(checkPath);
+
+            DiskFreeText.Text = $"💾 {_diskSpaceService.FormatFreeSpace(result.FreeBytes)}";
+
+            DiskEstimateText.Text = result.EstimatedHours >= 100
+                ? "~∞"
+                : $"~{result.EstimatedHours:F1}h";
+
+            var color = result.EstimatedHours switch
+            {
+                < 0.5  => RedBrush,    
+                < 1.0  => OrangeBrush, 
+                _      => GrayBrush    
+            };
+
+            DiskFreeText.Foreground    = color;
+            DiskEstimateText.Foreground = color;
+        }
+        catch
+        {
+            DiskFreeText.Text    = "💾 —";
+            DiskEstimateText.Text = "";
+        }
     }
 
     private void UpdateTimers()
@@ -112,11 +160,11 @@ public partial class OverlayWindow : Window
             DragMove();
     }
     
+    private void CloseButton_Click(object sender, RoutedEventArgs e) => Hide();
+    
     private void MarkerButton_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is MainViewModel vm)
             _ = vm.AddMarkerCommand.ExecuteAsync(null);
     }
-
-    private void CloseButton_Click(object sender, RoutedEventArgs e) => Hide();
 }
