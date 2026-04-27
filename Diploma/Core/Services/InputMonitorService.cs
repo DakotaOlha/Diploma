@@ -14,6 +14,10 @@ public class InputMonitorService : IInputMonitorService
     
     private readonly ILogService _logService;
     private readonly InputProcessorService _processor;
+    
+    private readonly WindowTitleMonitor _windowTitleMonitor;
+    private readonly ProcessMonitor _processMonitor;
+    private readonly FileSystemMonitor _fileSystemMonitor;
 
     private IKeyboardMouseEvents? _hook;
     private System.Threading.Timer? _idleTimer;
@@ -33,6 +37,10 @@ public class InputMonitorService : IInputMonitorService
         _profileService = profileService;
         _processor      = new InputProcessorService(logService, profileService);
         _currentProfile = profileService.GetProfile(RecordingMode.Personal);
+        
+        _windowTitleMonitor = new WindowTitleMonitor(logService);
+        _processMonitor     = new ProcessMonitor(logService);
+        _fileSystemMonitor  = new FileSystemMonitor(logService);
     }
 
     public bool IsRunning => _isRunning;
@@ -52,6 +60,9 @@ public class InputMonitorService : IInputMonitorService
         });
 
         _idleTimer = new System.Threading.Timer(CheckIdle, null, 10000, 30000);
+        
+        _windowTitleMonitor.Start(sessionId);
+        _processMonitor.Start(sessionId);
     }
     
     public void SetMode(RecordingMode mode)
@@ -111,6 +122,11 @@ public class InputMonitorService : IInputMonitorService
                 _sessionId, EventTypes.IdleStart, $"Idle for {IdleThresholdMinutes}m");
         }
     }
+    
+    public void AddWatchPath(string path)
+    {
+        _fileSystemMonitor.AddPath(path);
+    }
 
     public void Stop()
     {
@@ -128,7 +144,17 @@ public class InputMonitorService : IInputMonitorService
             _hook.Dispose();
             _hook = null;
         });
+        
+        _windowTitleMonitor.Stop();
+        _processMonitor.Stop();
+        _fileSystemMonitor.Stop();
     }
 
-    public void Dispose() => Stop();
+    public void Dispose()
+    {
+        Stop();
+        _windowTitleMonitor.Dispose();
+        _processMonitor.Dispose();
+        _fileSystemMonitor.Dispose();
+    }
 }
