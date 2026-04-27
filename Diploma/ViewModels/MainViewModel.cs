@@ -27,8 +27,10 @@ public partial class MainViewModel : ObservableObject
     private readonly IAudioCaptureService _audioCaptureService;
     private readonly ModeProfileService _profileService;
     private readonly DiskSpaceService _diskSpaceService;
+    private readonly MediaMergeService _mediaMergeService;
     
     private string _currentAudioPath = string.Empty;
+    private string _currentVideoPath = string.Empty;
     
     [ObservableProperty] private bool _isMicEnabled = true;
     [ObservableProperty] private string _selectedMicDevice = string.Empty;
@@ -44,7 +46,8 @@ public partial class MainViewModel : ObservableObject
         IInputMonitorService inputMonitor,
         IAudioCaptureService audioCaptureService,
         ModeProfileService profileService,
-        DiskSpaceService diskSpaceService)
+        DiskSpaceService diskSpaceService,
+        MediaMergeService mediaMergeService)
     {
         _captureService = captureService;
         _logService = logService;
@@ -52,6 +55,7 @@ public partial class MainViewModel : ObservableObject
         _audioCaptureService = audioCaptureService;
         _profileService = profileService;
         _diskSpaceService = diskSpaceService;
+        _mediaMergeService = mediaMergeService;
         
         AvailableModes = _profileService.GetAllProfiles();
         SelectedMode = AvailableModes.First(m => m.Mode == RecordingMode.Personal);
@@ -126,6 +130,7 @@ public partial class MainViewModel : ObservableObject
             "AlgoReplay", timestamp);
         
         var videoPath = Path.Combine(sessionDir, "screen.mp4");
+        _currentVideoPath = videoPath;
         
         var diskCheck = _diskSpaceService.Check(videoPath);
         if (!diskCheck.HasEnoughSpace)
@@ -161,9 +166,7 @@ public partial class MainViewModel : ObservableObject
         await _captureService.StopAsync();
 
         if (_audioCaptureService.IsRecording)
-        {
             await _audioCaptureService.StopAsync();
-        }
 
         await _logService.EndSessionAsync(_currentSessionId);
 
@@ -177,6 +180,36 @@ public partial class MainViewModel : ObservableObject
         RecordingDuration = TimeSpan.Zero;
         App.Current.Dispatcher.Invoke(() =>
             ((App)App.Current).GetOverlay().Hide());
+        
+        await TryMergeOutputAsync();
+    }
+    
+    private async Task TryMergeOutputAsync()
+    {
+        var videoPath = _currentVideoPath;  
+        var audioPath = _currentAudioPath;          
+
+        if (!MediaMergeService.CanMerge(videoPath, audioPath))
+        {
+            StatusText = "Merge skipped: one of the source files is missing or empty.";
+            return;
+        }
+
+        var dir    = Path.GetDirectoryName(videoPath)!;
+        var merged = Path.Combine(dir, "merged.mp4");
+
+        StatusText = "Merging audio + video…";
+        var ok = await _mediaMergeService.MergeAsync(videoPath, audioPath, merged);
+
+        if (ok)
+        {
+            await _logService.UpdateSessionVideoPathAsync(_currentSessionId, merged);
+            StatusText = $"Saved: {Path.GetFileName(merged)}";
+        }
+        else
+        {
+            StatusText = "Merge failed — check logs. Originals are intact.";
+        }
     }
     
     [RelayCommand]
@@ -200,31 +233,5 @@ public partial class MainViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(CanSelectMode));
         OnPropertyChanged(nameof(CanAddMarker));
-    }
-    
-    private async void OnRecordingStarted(object? sender, EventArgs e)
-    {
-        await App.Current.Dispatcher.InvokeAsync(async () =>
-        {
-            _durationTimer?.Stop(); 
-            _durationTimer = new System.Timers.Timer(1000);
-            _durationTimer.Elapsed += (_, _) =>
-                App.Current.Dispatcher.Invoke(() =>
-                    RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1)));
-            _durationTimer.Start();
-
-            if (IsMicEnabled && MicDevices.Count > 0)
-            {
-                try 
-                {
-                    _audioCaptureService.SelectedDevice = SelectedMicDevice;
-                    await _audioCaptureService.StartAsync(_currentAudioPath);
-                }
-                catch (Exception ex)
-                {
-                    StatusText = "Audio Error: " + ex.Message;
-                }
-            }
-        });
     }
 }
