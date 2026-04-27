@@ -171,4 +171,20 @@ public class LogService : ILogService
         Description = (string)r.Description,
         Metadata    = (string?)r.Metadata
     };
+    
+    public async Task UpdateSessionVideoPathAsync(int sessionId, string newVideoPath)
+    {
+        const string sql = """
+                               UPDATE RecordingSessions
+                               SET VideoFilePath = @VideoFilePath
+                               WHERE Id = @Id
+                           """;
+
+        using var conn = CreateConnection();
+        await conn.ExecuteAsync(sql, new
+        {
+            VideoFilePath = newVideoPath,
+            Id            = sessionId
+        });
+    }
 }
