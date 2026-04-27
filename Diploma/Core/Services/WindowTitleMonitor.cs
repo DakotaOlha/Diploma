@@ -17,6 +17,7 @@ public class WindowTitleMonitor : IDisposable
 
     private string _lastTitle = string.Empty;
     private string _lastProcess = string.Empty;
+    private string _lastFileName = string.Empty;
     private int _sessionId;
     private bool _isRunning;
     private bool _disposed;
@@ -68,14 +69,23 @@ public class WindowTitleMonitor : IDisposable
             {
                 var fileName = ExtractFileName(title, process);
 
-                if (!string.IsNullOrWhiteSpace(fileName))
+                bool processJustChanged = process != _lastProcess;
+                
+                if (!string.IsNullOrWhiteSpace(fileName)
+                    && fileName != _lastProcess
+                    && !processJustChanged)
                 {
                     _ = _logService.LogEventAsync(
                         _sessionId,
                         EventTypes.FileSwitched,
                         $"Switched to: {fileName}",
                         metadata: process);
+                    
+                    _lastFileName = fileName;
                 }
+                
+                if (processJustChanged)
+                    _lastFileName = fileName;
             }
             
             _lastTitle = title;
@@ -88,14 +98,23 @@ public class WindowTitleMonitor : IDisposable
     {
         var separations = new[] { " – ", " — ", " - " };
 
+        string rawName = title;
+
         foreach (var sep in separations)
         {
             var idx = title.IndexOf(sep, StringComparison.Ordinal);
             if (idx > 0)
-                return title[..idx].Trim();
+            {
+                rawName =  title[..idx].Trim();
+                break;
+            }
         }
         
-        return title.Trim();
+        rawName = rawName
+            .TrimStart('●', '•', '◆', '*', '⬤')
+            .Trim();
+        
+        return rawName;
     }
     
     [DllImport("user32.dll")]
