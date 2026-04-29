@@ -39,22 +39,8 @@ public partial class PlayerView : UserControl
     private void SeekSlider_DragCompleted(object sender, DragCompletedEventArgs e)
     {
         _isDragging = false;
-        _vm.SeekCommand.Execute((long)SeekSlider.Value);
         
-        Loaded += (_, _) =>
-        {
-            if (VideoView.MediaPlayer == null)
-                VideoView.MediaPlayer = _vm.MediaPlayer;
-
-            _vm.PropertyChanged += (_, e) =>
-            {
-                if (e.PropertyName == nameof(PlayerViewModel.ActiveEntry)
-                    && _vm.ActiveEntry is not null)
-                {
-                    EntriesGrid.ScrollIntoView(_vm.ActiveEntry);
-                }
-            };
-        };
+        _vm.SeekCommand.Execute((long)SeekSlider.Value);
     }
 
     private void SeekSlider_MouseUp(object sender, MouseButtonEventArgs e)
