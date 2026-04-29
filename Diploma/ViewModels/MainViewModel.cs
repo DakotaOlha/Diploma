@@ -28,6 +28,7 @@ public partial class MainViewModel : ObservableObject
     private readonly ModeProfileService _profileService;
     private readonly DiskSpaceService _diskSpaceService;
     private readonly MediaMergeService _mediaMergeService;
+    private readonly IGlobalHotkeyService _hotkeyService;
     
     private string _currentAudioPath = string.Empty;
     private string _currentVideoPath = string.Empty;
@@ -47,7 +48,8 @@ public partial class MainViewModel : ObservableObject
         IAudioCaptureService audioCaptureService,
         ModeProfileService profileService,
         DiskSpaceService diskSpaceService,
-        MediaMergeService mediaMergeService)
+        MediaMergeService mediaMergeService,
+        IGlobalHotkeyService hotkeyService)
     {
         _captureService = captureService;
         _logService = logService;
@@ -56,6 +58,7 @@ public partial class MainViewModel : ObservableObject
         _profileService = profileService;
         _diskSpaceService = diskSpaceService;
         _mediaMergeService = mediaMergeService;
+        _hotkeyService = hotkeyService;
         
         AvailableModes = _profileService.GetAllProfiles();
         SelectedMode = AvailableModes.First(m => m.Mode == RecordingMode.Personal);
@@ -64,25 +67,19 @@ public partial class MainViewModel : ObservableObject
             if (MicDevices.Count > 0)
                 SelectedMicDevice = MicDevices[0];
         
-        if (_inputMonitor is InputMonitorService monitor)
+        _hotkeyService.StartStopRequested += async (_, _) =>
         {
-            monitor.HotkeyStartStop += async (_, _) =>
+            await App.Current.Dispatcher.InvokeAsync(async () =>
             {
-                await App.Current.Dispatcher.InvokeAsync(async () =>
-                {
-                    if (IsRecording)
-                        await StopRecordingAsync();
-                    else
-                        await StartRecordingAsync();
-                });
-            };
-            
-            monitor.HotkeyMarker += async (_, _) =>
-            {
-                await App.Current.Dispatcher.InvokeAsync(async () =>
-                    await AddMarkerAsync());
-            };
-        }
+                if (IsRecording) await StopRecordingAsync();
+                else await StartRecordingAsync();
+            });
+        };
+        
+        _hotkeyService.MarkerRequested += async (_, _) =>
+        {
+            await App.Current.Dispatcher.InvokeAsync(async () => await AddMarkerAsync());
+        };
         
         _captureService.StatusChanged  += (_, msg) => StatusText = msg;
         
