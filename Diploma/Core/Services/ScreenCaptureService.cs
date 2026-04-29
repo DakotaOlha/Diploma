@@ -1,5 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Channels;
 using System.Windows;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
@@ -20,16 +21,22 @@ namespace Diploma.Core.Services;
 
 public class ScreenCaptureService: IScreenCaptureService, IDisposable
 {
-    private const int FFmpegShutdownTimeoutMs = 15_000;
+    private const int TargetFrameRate = 30;
+    private const int ChannelCapacity = 8;
+    private const int FirstFrameTimeoutMs   = 5_000;
+    private const int FFmpegShutdownTimeoutMs = 30_000;
     private const int FirstFrameTimeoutSeconds = 5;
     private const int FramePoolBufferCount = 2;
-    private const int TargetFrameRate = 30;
     
     private CancellationTokenSource? _cts;
     private Task? _captureTask;
+    private Task? _encodeTask;
+    
+    private Channel<BgraVideoFrame>? _frameChannel;
     private volatile bool _isRecording;
-    private volatile byte[]? _latestFrame;
     private bool _disposed;
+    
+    private volatile byte[]? _latestFrame;
     
     private ID3D11Device? _d3dDevice;
     private ID3D11DeviceContext? _d3dContext;
@@ -47,38 +54,42 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     {
         if (_isRecording) return Task.CompletedTask;
         
+        _frameChannel = Channel.CreateBounded<BgraVideoFrame>(
+        new BoundedChannelOptions(ChannelCapacity)
+        {
+            FullMode     = BoundedChannelFullMode.DropOldest,
+            SingleWriter = true,
+            SingleReader = true,
+        });
+        
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _isRecording = true;
         
-        _captureTask = Task.Run(() => CaptureLoop(outputPath, _cts.Token), _cts.Token);
+        _captureTask = Task.Run(() => CaptureLoopAsync(outputPath, _cts.Token));
+        
         return Task.CompletedTask;
     }
     
     public async Task StopAsync()
     {
+        if (!_isRecording) return;
+        
         _cts?.Cancel();
         _isRecording = false;
         
         if (_captureTask != null)
             await _captureTask.ConfigureAwait(false);
         
+        if (_encodeTask != null)
+            await _encodeTask.ConfigureAwait(false);
+        
         Log("Recording stopped");
     }
     
-    public void Dispose()
+    private async Task CaptureLoopAsync(string outputPath, CancellationToken token)
     {
-        if (_disposed) return;
-        _disposed = true;
+        ChannelWriter<BgraVideoFrame> writer = _frameChannel!.Writer;
         
-        _cts?.Cancel();
-        _captureTask?.Wait(TimeSpan.FromSeconds(2));
-        _cts?.Dispose();
-        _d3dContext?.Dispose();
-        _d3dDevice?.Dispose();
-    }
-    
-    private async Task CaptureLoop(string outputPath, CancellationToken token)
-    {
         try
         {
             var item = await Application.Current.Dispatcher.InvokeAsync(async () =>
@@ -90,130 +101,149 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             if (item == null)
             {
                 _isRecording = false;
+                writer.Complete();
                 return;
             }
             
             CaptureTargetSelected?.Invoke(this, EventArgs.Empty);
-
-            Log("Recording started");
+            Log("Capture target selected, initialising D3D…");
             
-            var winrtDevice = CreateDevice();
-
+            var winrtDevice = CreateD3DDevice();
+            int width  = item.Size.Width;
+            int height = item.Size.Height;
+ 
             Direct3D11CaptureFramePool? framePool = null;
-            GraphicsCaptureSession? session = null;
-
+            GraphicsCaptureSession?     session   = null;
+ 
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
                     winrtDevice,
                     DirectXPixelFormat.B8G8R8A8UIntNormalized,
-                    FramePoolBufferCount,
+                    2,
                     item.Size);
-
+ 
                 session = framePool.CreateCaptureSession(item);
                 session.IsCursorCaptureEnabled = true;
-
+ 
                 framePool.FrameArrived += (pool, _) =>
                 {
                     using var frame = pool.TryGetNextFrame();
-                    if (frame == null) return;
-
-                    var bytes = ConvertFrameToBytes(frame);
-
-                    if (bytes != null)
-                        _latestFrame = bytes;
+                    if (frame is null) return;
+ 
+                    var bytes = ConvertFrameToBytes(frame, width, height);
+                    if (bytes is null) return;
+ 
+                    var videoFrame = new BgraVideoFrame(bytes, width, height);
+                    
+                    writer.TryWrite(videoFrame);
                 };
-
+ 
                 session.StartCapture();
             });
-
-            var firstFrameTimeout = DateTime.Now.AddSeconds(FirstFrameTimeoutSeconds);
-            while (_latestFrame == null && DateTime.Now < firstFrameTimeout && !token.IsCancellationRequested)
+ 
+            using var firstFrameCts = new CancellationTokenSource(FirstFrameTimeoutMs);
+            using var linked        = CancellationTokenSource.CreateLinkedTokenSource(
+                                          token, firstFrameCts.Token);
+ 
+            bool gotFirstFrame = false;
+            try
             {
-                await Task.Delay(50, token);
+                await foreach (var _ in _frameChannel!.Reader.ReadAllAsync(linked.Token))
+                {
+                    gotFirstFrame = true;
+                    break;
+                }
             }
-
-            if (_latestFrame == null)
+            catch (OperationCanceledException) {  }
+ 
+            if (!gotFirstFrame)
             {
-                Log("No frames received, aborting");
+                Log("No frames received within timeout — aborting.");
                 await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     session?.Dispose();
                     framePool?.Dispose();
                 });
+                writer.Complete();
                 return;
             }
-
-            int width = item.Size.Width;
-            int height = item.Size.Height;
-
-            await EncodeThroughFFmpeg(outputPath, width, height, token);
-
+ 
+            Log("First frame received — starting encode…");
+            RecordingStarted?.Invoke(this, EventArgs.Empty);
+ 
+            _encodeTask = Task.Run(() => EncodeLoopAsync(outputPath, width, height));
+ 
+            try { await Task.Delay(Timeout.Infinite, token); }
+            catch (OperationCanceledException) { }
+ 
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 session?.Dispose();
                 framePool?.Dispose();
             });
         }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Log($"Capture error: {ex.GetType().Name}: {ex.Message}");
         }
+        finally
+        {
+            writer.TryComplete();
+        }
     }
     
-    private async Task EncodeThroughFFmpeg(
-        string outputPath,
-        int width, int height,
-        CancellationToken token)
+    private async Task EncodeLoopAsync(string outputPath, int width, int height)
     {
-        bool stopRequested = false;
-        bool firstFrameFired = false;
-        
-        IEnumerable<IVideoFrame> GenerateFrames()
+        IEnumerable<IVideoFrame> FrameSource()
         {
-            while (_latestFrame == null && !stopRequested)
-                Thread.Sleep(10);
-
-            if (_latestFrame == null) yield break;
-
-            RecordingStarted?.Invoke(this, EventArgs.Empty);
-
-            byte[] lastFrame = _latestFrame;
-    
+            var reader = _frameChannel!.Reader;
             var sw = System.Diagnostics.Stopwatch.StartNew();
             long frameIndex = 0;
-            double frameDuration = 1000.0 / TargetFrameRate;
-
-            while (!stopRequested)
+            double frameDuration = 1000.0 / TargetFrameRate; // 33.333 мс для 30 FPS
+            BgraVideoFrame? lastFrame = null;
+ 
+            var waitTask = reader.WaitToReadAsync().AsTask();
+            waitTask.Wait();
+            
+            while (true)
             {
-                var current = _latestFrame;
-                if (current != null)
-                    lastFrame = current;
+                while (reader.TryRead(out var newFrame))
+                {
+                    lastFrame = newFrame;
+                }
 
-                yield return new BgraVideoFrame(lastFrame, width, height);
+                if (lastFrame == null || (!_isRecording && reader.Completion.IsCompleted))
+                {
+                    break;
+                }
+
+                yield return lastFrame;
                 frameIndex++;
 
                 double targetMs = frameIndex * frameDuration;
                 double currentMs = sw.Elapsed.TotalMilliseconds;
                 double sleepMs = targetMs - currentMs;
 
-                if (sleepMs > 1)
+                if (sleepMs > 0)
+                {
                     Thread.Sleep((int)sleepMs);
+                }
             }
         }
-        
-        var videoFramesSource = new RawVideoPipeSource(GenerateFrames())
+ 
+        var videoSource = new RawVideoPipeSource(FrameSource()) { FrameRate = TargetFrameRate };
+ 
+        try
         {
-            FrameRate = 30
-        };
-        
-        using var emergencyCts = new CancellationTokenSource();
-
-        try 
-        {
-            var analyzeTask = FFMpegArguments
-                .FromPipeInput(videoFramesSource, opts => opts
+            Log("FFmpeg encode started…");
+ 
+            using var forceCts     = new CancellationTokenSource();
+            
+            _cts?.Token.Register(() => forceCts.CancelAfter(FFmpegShutdownTimeoutMs));
+            
+            var encodeTask = FFMpegArguments
+                .FromPipeInput(videoSource, opts => opts
                     .WithVideoCodec("rawvideo")
                     .ForceFormat("rawvideo")
                     .WithCustomArgument($"-pix_fmt bgra -s {width}x{height}"))
@@ -222,128 +252,95 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                     .WithConstantRateFactor(23)
                     .WithCustomArgument("-preset ultrafast")
                     .WithCustomArgument("-pix_fmt yuv420p"))
-                .CancellableThrough(emergencyCts.Token)
+                .CancellableThrough(forceCts.Token)
                 .ProcessAsynchronously();
-            
-            await Task.Delay(-1, token).ContinueWith(_ => { });
+ 
+            var success = await encodeTask;
         
-            stopRequested = true; 
-            Log("Finishing writing frames...");
-        
-            var completed = await Task.WhenAny(analyzeTask, Task.Delay(FFmpegShutdownTimeoutMs));
-            if (completed != analyzeTask)
-            {
-                Log("FFmpeg timeout — force cancelling");
-                emergencyCts.Cancel();
-                await analyzeTask.ContinueWith(_ => { });
-            }
+            if (success)
+                Log("Encode finished — MP4 fully written.");
             else
-            {
-                await analyzeTask;
-                Log("Recording saved successfully");
-            }
+                Log("Encode finished with errors or was force cancelled.");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Log($"Encoding error: {ex.GetType().Name}: {ex.Message}");
+            Log($"Encode error: {ex.GetType().Name}: {ex.Message}");
         }
     }
     
-    private IDirect3DDevice CreateDevice()
+    private IDirect3DDevice CreateD3DDevice()
     {
-        var result = D3D11.D3D11CreateDevice(
+        D3D11.D3D11CreateDevice(
             (IntPtr)null,
             DriverType.Hardware,
             DeviceCreationFlags.BgraSupport,
             null!,
             out var device,
-            out var context);
-        
-        result.CheckError();
-
-        _d3dDevice = device;
+            out var context).CheckError();
+ 
+        _d3dDevice  = device;
         _d3dContext = context;
-
+ 
         using var dxgiDevice = device.QueryInterface<IDXGIDevice>();
-
-        CreateDirect3D11DeviceFromDXGIDevice(
-            dxgiDevice.NativePointer,
-            out var pDevice);
-
-        var winrtDevice = WinRT.MarshalInterface<IDirect3DDevice>.FromAbi(pDevice);
+        CreateDirect3D11DeviceFromDXGIDevice(dxgiDevice.NativePointer, out var pDevice);
+ 
+        var winrtDevice = MarshalInterface<IDirect3DDevice>.FromAbi(pDevice);
         Marshal.Release(pDevice);
-
         return winrtDevice;
     }
 
-    private byte[]? ConvertFrameToBytes(Direct3D11CaptureFrame frame)
+    private byte[]? ConvertFrameToBytes(Direct3D11CaptureFrame frame, int width, int height)
     {
-        if (_d3dDevice == null || _d3dContext == null) return null;
-
+        if (_d3dDevice is null || _d3dContext is null) return null;
+ 
         try
         {
-            var access = frame.Surface.As<IDirect3DDxgiInterfaceAccess>();
-
-            Guid guid = typeof(ID3D11Texture2D).GUID;
-            IntPtr texturePtr = access.GetInterface(guid);
-            
-            if (texturePtr == IntPtr.Zero)
-            {
-                return null;
-            }
-
+            var access     = frame.Surface.As<IDirect3DDxgiInterfaceAccess>();
+            var texturePtr = access.GetInterface(typeof(ID3D11Texture2D).GUID);
+            if (texturePtr == IntPtr.Zero) return null;
+ 
             using var texture = new ID3D11Texture2D(texturePtr);
-
-            var desc = texture.Description;
-            
+            var desc          = texture.Description;
+ 
             var stagingDesc = new Texture2DDescription
             {
-                Width = desc.Width,
-                Height = desc.Height,
-                MipLevels = 1,
-                ArraySize = 1,
-                Format = desc.Format,
+                Width             = desc.Width,
+                Height            = desc.Height,
+                MipLevels         = 1,
+                ArraySize         = 1,
+                Format            = desc.Format,
                 SampleDescription = new SampleDescription(1, 0),
-                Usage = ResourceUsage.Staging,
-                BindFlags = BindFlags.None,
-                CPUAccessFlags = CpuAccessFlags.Read
+                Usage             = ResourceUsage.Staging,
+                BindFlags         = BindFlags.None,
+                CPUAccessFlags    = CpuAccessFlags.Read,
             };
-
-            using var stagingTexture = _d3dDevice.CreateTexture2D(stagingDesc);
-
-            _d3dContext.CopyResource(stagingTexture, texture);
-
-            var mapped = _d3dContext.Map(stagingTexture, 0, MapMode.Read, MapFlags.None);
-
+ 
+            using var staging = _d3dDevice.CreateTexture2D(stagingDesc);
+            _d3dContext.CopyResource(staging, texture);
+ 
+            var mapped = _d3dContext.Map(staging, 0, MapMode.Read, MapFlags.None);
             try
             {
-                uint width = desc.Width;
-                uint height = desc.Height;
-
-                byte[] data = new byte[width * height * 4];
-
+                var data = new byte[width * height * 4];
                 unsafe
                 {
-                    byte* srcPtr = (byte*)mapped.DataPointer;
-                    uint rowPitch = mapped.RowPitch;
-
+                    byte* src = (byte*)mapped.DataPointer;
                     for (int y = 0; y < height; y++)
                     {
-                        var sourceRow = new ReadOnlySpan<byte>(srcPtr + y * rowPitch, (int)(width * 4));
-                        var destRow = new Span<byte>(data, (int)(y * width * 4), (int)(width * 4));
-                        sourceRow.CopyTo(destRow);
+                        new ReadOnlySpan<byte>(src + y * mapped.RowPitch, width * 4)
+                            .CopyTo(new Span<byte>(data, y * width * 4, width * 4));
                     }
                 }
                 return data;
             }
             finally
             {
-                _d3dContext.Unmap(stagingTexture, 0);
+                _d3dContext.Unmap(staging, 0);
             }
         }
         catch (Exception ex)
         {
-            Log($"Capture error: {ex.GetType().Name}: {ex.Message}");
+            Log($"Frame conversion error: {ex.GetType().Name}: {ex.Message}");
             return null;
         }
     }
@@ -355,6 +352,21 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             _logBuffer.AppendLine($"{DateTime.Now:HH:mm:ss.fff} | {message}");
             StatusChanged?.Invoke(this, _logBuffer.ToString());
         }
+    }
+    
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+ 
+        _cts?.Cancel();
+ 
+        _captureTask?.Wait(TimeSpan.FromSeconds(2));
+        _encodeTask?.Wait(TimeSpan.FromSeconds(5));
+ 
+        _cts?.Dispose();
+        _d3dContext?.Dispose();
+        _d3dDevice?.Dispose();
     }
     
     [DllImport("d3d11.dll", EntryPoint = "CreateDirect3D11DeviceFromDXGIDevice",
