@@ -39,6 +39,7 @@ public partial class App : Application
                 services.AddSingleton<IInputMonitorService, InputMonitorService>();
                 services.AddSingleton<IAudioCaptureService, AudioCaptureService>();
                 services.AddSingleton<IScreenCaptureService, ScreenCaptureService>();
+                services.AddSingleton<IGlobalHotkeyService, GlobalHotkeyService>();
                 services.AddSingleton<ModeProfileService>();
                 services.AddSingleton<DiskSpaceService>();
                 services.AddSingleton<MediaMergeService>();
@@ -56,6 +57,9 @@ public partial class App : Application
         
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();
         mainWindow.Show();
+        
+        var hotkeyService = _host.Services.GetRequiredService<IGlobalHotkeyService>();
+        hotkeyService.Start();
         
         base.OnStartup(e);
     }

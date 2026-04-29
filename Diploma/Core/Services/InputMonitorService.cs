@@ -27,9 +27,6 @@ public class InputMonitorService : IInputMonitorService
     private bool _ctrlDown;
     private bool _shiftDown;
     private bool _isRunning;
-
-    public event EventHandler? HotkeyStartStop;
-    public event EventHandler? HotkeyMarker;
     
     public InputMonitorService(ILogService logService, ModeProfileService profileService)
     {
@@ -77,18 +74,6 @@ public class InputMonitorService : IInputMonitorService
 
         if (e.KeyCode == Keys.LControlKey || e.KeyCode == Keys.RControlKey) _ctrlDown = true;
         if (e.KeyCode == Keys.LShiftKey || e.KeyCode == Keys.RShiftKey) _shiftDown = true;
-
-        if (_ctrlDown && _shiftDown && e.KeyCode == Keys.R)
-        {
-            HotkeyStartStop?.Invoke(this, EventArgs.Empty);
-            return;
-        }
-        
-        if (_ctrlDown && _shiftDown && e.KeyCode == Keys.M)
-        {
-            HotkeyMarker?.Invoke(this, EventArgs.Empty);
-            return;
-        }
 
         _ = _processor.ProcessShortcutAsync(_sessionId, e.KeyCode, _ctrlDown, _shiftDown);
     }
