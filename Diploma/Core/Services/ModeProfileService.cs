@@ -85,7 +85,7 @@ public class ModeProfileService
                     EventTypes.IdeOpened, 
                     EventTypes.IdeClosed,
                     EventTypes.FileSwitched,
-                    EventTypes.FileSavedAuto,
+                    EventTypes.FileSavedAuto
                 }
             },
         };
