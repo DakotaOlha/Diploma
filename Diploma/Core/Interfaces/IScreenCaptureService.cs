@@ -3,7 +3,7 @@
 public interface IScreenCaptureService
 {
     bool IsRecording { get; }
-    Task StartAsync(string outputPath, CancellationToken ct = default);
+    Task<bool> StartAsync(string outputPath, CancellationToken ct = default); // Змінено на Task<bool>
     Task StopAsync();
     event EventHandler<string>? StatusChanged;
     event EventHandler? RecordingStarted;

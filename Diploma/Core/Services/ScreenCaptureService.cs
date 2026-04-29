@@ -50,24 +50,33 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     public event EventHandler? RecordingStarted;
     public event EventHandler? CaptureTargetSelected;
 
-    public Task StartAsync(string outputPath, CancellationToken ct = default)
+    public async Task<bool> StartAsync(string outputPath, CancellationToken ct = default)
     {
-        if (_isRecording) return Task.CompletedTask;
-        
-        _frameChannel = Channel.CreateBounded<BgraVideoFrame>(
-        new BoundedChannelOptions(ChannelCapacity)
+        if (_isRecording) return false;
+
+        var item = await Application.Current.Dispatcher.InvokeAsync(async () =>
         {
-            FullMode     = BoundedChannelFullMode.DropOldest,
+            var hwnd = new WindowInteropHelper(Application.Current.MainWindow).Handle;
+            return await CapturePickerHelper.PickAsync(hwnd);
+        }).Task.Unwrap();
+
+        if (item == null) return false;
+
+        _frameChannel = Channel.CreateBounded<BgraVideoFrame>(new BoundedChannelOptions(ChannelCapacity)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest,
             SingleWriter = true,
             SingleReader = true,
         });
-        
+    
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _isRecording = true;
-        
-        _captureTask = Task.Run(() => CaptureLoopAsync(outputPath, _cts.Token));
-        
-        return Task.CompletedTask;
+
+        CaptureTargetSelected?.Invoke(this, EventArgs.Empty);
+    
+        _captureTask = Task.Run(() => CaptureLoopAsync(item, outputPath, _cts.Token));
+    
+        return true;
     }
     
     public async Task StopAsync()
@@ -86,17 +95,12 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         Log("Recording stopped");
     }
     
-    private async Task CaptureLoopAsync(string outputPath, CancellationToken token)
+    private async Task CaptureLoopAsync(GraphicsCaptureItem item, string outputPath, CancellationToken token)
     {
         ChannelWriter<BgraVideoFrame> writer = _frameChannel!.Writer;
         
         try
         {
-            var item = await Application.Current.Dispatcher.InvokeAsync(async () =>
-            {
-                var hwnd = new WindowInteropHelper(Application.Current.MainWindow).Handle;
-                return await CapturePickerHelper.PickAsync(hwnd);
-            }).Task.Unwrap();
 
             if (item == null)
             {
