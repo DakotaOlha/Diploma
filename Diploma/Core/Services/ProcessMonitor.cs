@@ -41,9 +41,8 @@ public class ProcessMonitor : IDisposable
         foreach (var ide in GetRunningIdes())
         {  
             _runningIdes.Add(ide);
-            
-            _timer = new Timer(Tick, null, 0, 1000);
         }
+        _timer = new Timer(Tick, null, 4000, 4000);
     }
 
     public void Stop()
