@@ -14,6 +14,8 @@ public class WindowTitleMonitor : IDisposable
     
     private readonly ILogService _logService;
     private Timer? _timer;
+    
+    private readonly Dictionary<string, string> _lastFilePerProcess = new();
 
     private string _lastTitle = string.Empty;
     private string _lastProcess = string.Empty;
@@ -45,6 +47,9 @@ public class WindowTitleMonitor : IDisposable
         _isRunning = false;
         _timer?.Dispose();
         _timer = null;
+        
+        _lastFilePerProcess.Clear();
+        _lastProcess = string.Empty;
     }
 
     public void Tick(object? state)
@@ -53,42 +58,38 @@ public class WindowTitleMonitor : IDisposable
 
         try
         {
-            var hwmd = GetForegroundWindow();
-            if (hwmd == IntPtr.Zero) return;
-            
-            var title = GetWindowTitle(hwmd);
-            var process = GetProcessName(hwmd);
+            var hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero) return;
+
+            var title   = GetWindowTitle(hwnd);
+            var process = GetProcessName(hwnd);
 
             if (string.IsNullOrWhiteSpace(title)) return;
+            if (!IdeProcessNames.Contains(process)) return;
 
-            if (title == _lastTitle && process == _lastProcess) return;
+            var fileName = ExtractFileName(title, process);
+            if (string.IsNullOrEmpty(fileName)) return;
             
-            var isIde = IdeProcessNames.Contains(process);
+            _lastFilePerProcess.TryGetValue(process, out var lastFile);
 
-            if (isIde && title != _lastTitle)
+            if (fileName != lastFile)
             {
-                var fileName = ExtractFileName(title, process);
-
-                bool processJustChanged = process != _lastProcess;
-                
-                if (!string.IsNullOrWhiteSpace(fileName)
-                    && fileName != _lastProcess
-                    && !processJustChanged)
+                if (process != _lastProcess)
                 {
-                    _ = _logService.LogEventAsync(
-                        _sessionId,
-                        EventTypes.FileSwitched,
-                        $"Switched to: {fileName}",
-                        metadata: process);
-                    
-                    _lastFileName = fileName;
+                    _lastFilePerProcess[process] = fileName;
+                    _lastProcess = process;
+                    return;
                 }
-                
-                if (processJustChanged)
-                    _lastFileName = fileName;
+
+                _ = _logService.LogEventAsync(
+                    _sessionId,
+                    EventTypes.FileSwitched,
+                    $"Switched to: {fileName}",
+                    metadata: process);
+
+                _lastFilePerProcess[process] = fileName;
             }
-            
-            _lastTitle = title;
+
             _lastProcess = process;
         }
         catch {}
