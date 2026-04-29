@@ -156,6 +156,11 @@ public partial class MainViewModel : ObservableObject
         _inputMonitor.SetMode(mode); 
         _inputMonitor.Start(_currentSessionId);
 
+        _inputMonitor.AddWatchPath(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
+        _inputMonitor.AddWatchPath(
+            Environment.GetFolderPath(Environment.SpecialFolder.Desktop));
+        
         await _captureService.StartAsync(videoPath);
         IsRecording = true;
     }

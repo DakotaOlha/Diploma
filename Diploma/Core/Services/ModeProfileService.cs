@@ -77,12 +77,15 @@ public class ModeProfileService
                     EventTypes.ClipboardCopy,
                     EventTypes.ClipboardPaste,
                     EventTypes.FileSave,
-                    EventTypes.Undo,
                     EventTypes.RunOrDebug,
                     EventTypes.IdleStart,
                     EventTypes.IdleEnd,
                     EventTypes.ManualMarker,
                     EventTypes.Screenshot,
+                    EventTypes.IdeOpened, 
+                    EventTypes.IdeClosed,
+                    EventTypes.FileSwitched,
+                    EventTypes.FileSavedAuto
                 }
             },
         };

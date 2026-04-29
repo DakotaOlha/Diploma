@@ -8,5 +8,6 @@ public interface IInputMonitorService : IDisposable
     void Start(int sessionId);
     void Stop();
     void SetMode(RecordingMode mode);
+    void AddWatchPath(string path); 
     event EventHandler? HotkeyMarker;
 }
