@@ -71,6 +71,9 @@ public partial class MainViewModel : ObservableObject
         {
             await App.Current.Dispatcher.InvokeAsync(async () =>
             {
+                System.Windows.Application.Current.MainWindow?.Activate();
+                System.Windows.Application.Current.MainWindow?.Focus();
+
                 if (IsRecording) await StopRecordingAsync();
                 else await StartRecordingAsync();
             });
@@ -142,6 +145,9 @@ public partial class MainViewModel : ObservableObject
         App.Current.Dispatcher.Invoke(() =>
             ((App)App.Current).GetOverlay().SetOutputPath(videoPath));
         
+        var started = await _captureService.StartAsync(videoPath);
+        if (!started) return;
+        
         _currentSessionId = await _logService.StartSessionAsync(
             name: $"Session {DateTime.Now:dd.MM.yyyy HH:mm}",
             mode: mode,
@@ -155,7 +161,7 @@ public partial class MainViewModel : ObservableObject
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
         _inputMonitor.AddWatchPath(
             Environment.GetFolderPath(Environment.SpecialFolder.Desktop));
-        
+
         await _captureService.StartAsync(videoPath);
         IsRecording = true;
     }
