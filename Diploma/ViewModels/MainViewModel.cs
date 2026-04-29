@@ -82,8 +82,6 @@ public partial class MainViewModel : ObservableObject
                 await App.Current.Dispatcher.InvokeAsync(async () =>
                     await AddMarkerAsync());
             };
-        
-            monitor.Start(0);
         }
         
         _captureService.StatusChanged  += (_, msg) => StatusText = msg;
@@ -176,7 +174,6 @@ public partial class MainViewModel : ObservableObject
         await _logService.EndSessionAsync(_currentSessionId);
 
         _inputMonitor.Stop();
-        _inputMonitor.Start(0);
 
         IsRecording = false;
         _durationTimer?.Stop();
