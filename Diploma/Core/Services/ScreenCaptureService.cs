@@ -231,41 +231,52 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     {
         IEnumerable<IVideoFrame> FrameSource(CancellationToken ct)
         {
-            var reader = _frameChannel!.Reader;
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            long frameIndex = 0;
+            var reader           = _frameChannel!.Reader;
+            var sw               = System.Diagnostics.Stopwatch.StartNew();
+            long frameIndex      = 0;
             double frameDuration = 1000.0 / TargetFrameRate;
             BgraVideoFrame? lastFrame = null;
- 
-            reader.WaitToReadAsync(ct).AsTask().Wait(ct);
-            
-            BgraVideoFrame? prevFrame = null;
-            
-            while (!ct.IsCancellationRequested)
-            {
-                prevFrame?.Return();
-                prevFrame = null;
 
-                while (reader.TryRead(out var newFrame))
+            reader.WaitToReadAsync(ct).AsTask().Wait(ct);
+
+            timeBeginPeriod(1);
+            try
+            {
+                BgraVideoFrame? prevFrame = null;
+
+                while (!ct.IsCancellationRequested)
                 {
-                    if (lastFrame != null && !ReferenceEquals(lastFrame, newFrame))
-                        lastFrame.Return();
-                    lastFrame = newFrame;
+                    prevFrame?.Return();
+                    prevFrame = null;
+
+                    while (reader.TryRead(out var newFrame))
+                    {
+                        if (lastFrame != null && !ReferenceEquals(lastFrame, newFrame))
+                            lastFrame.Return();
+
+                        lastFrame = newFrame;
+                    }
+
+                    if (lastFrame == null)
+                        break;
+
+                    prevFrame = lastFrame;
+                    yield return lastFrame;
+                    frameIndex++;
+
+                    double targetMs = frameIndex * frameDuration;
+                    double sleepMs  = targetMs - sw.Elapsed.TotalMilliseconds;
+
+                    if (sleepMs > 0)
+                        Thread.Sleep((int)sleepMs);
                 }
 
-                if (lastFrame == null) break;
-
-                prevFrame = lastFrame;
-                yield return lastFrame;
-                frameIndex++;
-
-                double targetMs = frameIndex * frameDuration;
-                double sleepMs  = targetMs - sw.Elapsed.TotalMilliseconds;
-
-                if (sleepMs > 0)
-                    Thread.Sleep((int)sleepMs);
+                prevFrame?.Return();
             }
-            prevFrame?.Return();
+            finally
+            {
+                timeEndPeriod(1);
+            }
         }
  
         var videoSource = new RawVideoPipeSource(FrameSource(token)) { FrameRate = TargetFrameRate };
