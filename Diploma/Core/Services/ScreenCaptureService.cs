@@ -101,21 +101,12 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         
         try
         {
-
-            if (item == null)
-            {
-                _isRecording = false;
-                writer.Complete();
-                return;
-            }
-            
-            CaptureTargetSelected?.Invoke(this, EventArgs.Empty);
             Log("Capture target selected, initialising D3D…");
             
             var winrtDevice = CreateD3DDevice();
             int width  = item.Size.Width;
             int height = item.Size.Height;
- 
+                
             Direct3D11CaptureFramePool? framePool = null;
             GraphicsCaptureSession?     session   = null;
  
@@ -149,7 +140,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             using var firstFrameCts = new CancellationTokenSource(FirstFrameTimeoutMs);
             using var linked        = CancellationTokenSource.CreateLinkedTokenSource(
                                           token, firstFrameCts.Token);
- 
+            
             bool gotFirstFrame = false;
             try
             {
@@ -204,7 +195,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             var reader = _frameChannel!.Reader;
             var sw = System.Diagnostics.Stopwatch.StartNew();
             long frameIndex = 0;
-            double frameDuration = 1000.0 / TargetFrameRate; // 33.333 мс для 30 FPS
+            double frameDuration = 1000.0 / TargetFrameRate;
             BgraVideoFrame? lastFrame = null;
  
             var waitTask = reader.WaitToReadAsync().AsTask();
@@ -242,7 +233,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         {
             Log("FFmpeg encode started…");
  
-            using var forceCts     = new CancellationTokenSource();
+            using var forceCts = new CancellationTokenSource();
             
             _cts?.Token.Register(() => forceCts.CancelAfter(FFmpegShutdownTimeoutMs));
             
@@ -304,7 +295,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             if (texturePtr == IntPtr.Zero) return null;
  
             using var texture = new ID3D11Texture2D(texturePtr);
-            var desc          = texture.Description;
+            var desc= texture.Description;
  
             var stagingDesc = new Texture2DDescription
             {
