@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Buffers;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Channels;
 using System.Windows;
@@ -39,6 +40,10 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     private ID3D11Device? _d3dDevice;
     private ID3D11DeviceContext? _d3dContext;
     
+    private ID3D11Texture2D? _stagingTexture;
+    private (int W, int H) _stagingSize;
+    private readonly object _stagingLock = new();
+    
     private readonly object _logLock = new();
     private readonly StringBuilder _logBuffer = new();
     
@@ -47,6 +52,18 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     public event EventHandler<string>? StatusChanged;
     public event EventHandler? RecordingStarted;
     public event EventHandler? CaptureTargetSelected;
+    
+    [DllImport("winmm.dll")]
+    private static extern uint timeBeginPeriod(uint uPeriod);
+ 
+    [DllImport("winmm.dll")]
+    private static extern uint timeEndPeriod(uint uPeriod);
+    
+    [DllImport("d3d11.dll", EntryPoint = "CreateDirect3D11DeviceFromDXGIDevice",
+        SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true,
+        CallingConvention = CallingConvention.StdCall)]
+    private static extern int CreateDirect3D11DeviceFromDXGIDevice(
+        IntPtr dxgiDevice, out IntPtr graphicsDevice);
 
     public async Task<bool> StartAsync(string outputPath, CancellationToken ct = default)
     {
@@ -80,17 +97,41 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     public async Task StopAsync()
     {
         if (!_isRecording) return;
-        
+ 
         _cts?.Cancel();
         _isRecording = false;
-        
+ 
         if (_captureTask != null)
-            await _captureTask.ConfigureAwait(false);
-        
+        {
+            try   { await _captureTask.ConfigureAwait(false); }
+            catch (OperationCanceledException) { /* expected */ }
+        }
+ 
         if (_encodeTask != null)
-            await _encodeTask.ConfigureAwait(false);
-        
+        {
+            try   { await _encodeTask.ConfigureAwait(false); }
+            catch (OperationCanceledException) { /* expected */ }
+        }
+ 
+        ResetD3DState();
+ 
         Log("Recording stopped");
+    }
+    
+    private void ResetD3DState()
+    {
+        lock (_stagingLock)
+        {
+            _stagingTexture?.Dispose();
+            _stagingTexture = null;
+            _stagingSize    = default;
+        }
+ 
+        _d3dContext?.Dispose();
+        _d3dContext = null;
+ 
+        _d3dDevice?.Dispose();
+        _d3dDevice = null;
     }
     
     private async Task CaptureLoopAsync(GraphicsCaptureItem item, string outputPath, CancellationToken token)
@@ -127,7 +168,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                     var bytes = ConvertFrameToBytes(frame, width, height);
                     if (bytes is null) return;
  
-                    var videoFrame = new BgraVideoFrame(bytes, width, height);
+                    var videoFrame = new BgraVideoFrame(bytes, width, height, pooled: true);
                     
                     writer.TryWrite(videoFrame);
                 };
@@ -190,32 +231,51 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     {
         IEnumerable<IVideoFrame> FrameSource(CancellationToken ct)
         {
-            var reader = _frameChannel!.Reader;
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            long frameIndex = 0;
+            var reader           = _frameChannel!.Reader;
+            var sw               = System.Diagnostics.Stopwatch.StartNew();
+            long frameIndex      = 0;
             double frameDuration = 1000.0 / TargetFrameRate;
             BgraVideoFrame? lastFrame = null;
- 
+
             reader.WaitToReadAsync(ct).AsTask().Wait(ct);
-            
-            while (!ct.IsCancellationRequested)
+
+            timeBeginPeriod(1);
+            try
             {
-                while (reader.TryRead(out var newFrame))
+                BgraVideoFrame? prevFrame = null;
+
+                while (!ct.IsCancellationRequested)
                 {
-                    lastFrame = newFrame;
+                    prevFrame?.Return();
+                    prevFrame = null;
+
+                    while (reader.TryRead(out var newFrame))
+                    {
+                        if (lastFrame != null && !ReferenceEquals(lastFrame, newFrame))
+                            lastFrame.Return();
+
+                        lastFrame = newFrame;
+                    }
+
+                    if (lastFrame == null)
+                        break;
+
+                    prevFrame = lastFrame;
+                    yield return lastFrame;
+                    frameIndex++;
+
+                    double targetMs = frameIndex * frameDuration;
+                    double sleepMs  = targetMs - sw.Elapsed.TotalMilliseconds;
+
+                    if (sleepMs > 0)
+                        Thread.Sleep((int)sleepMs);
                 }
 
-                if (lastFrame == null)
-                    break;
-
-                yield return lastFrame;
-                frameIndex++;
-
-                double targetMs = frameIndex * frameDuration;
-                double sleepMs  = targetMs - sw.Elapsed.TotalMilliseconds;
-
-                if (sleepMs > 0)
-                    Thread.Sleep((int)sleepMs);
+                prevFrame?.Return();
+            }
+            finally
+            {
+                timeEndPeriod(1);
             }
         }
  
@@ -225,16 +285,41 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         {
             Log("FFmpeg encode started…");
             
+            var videoEncoder = HardwareEncoderDetector.Detect();
+            
             var encodeTask = FFMpegArguments
                 .FromPipeInput(videoSource, opts => opts
                     .WithVideoCodec("rawvideo")
                     .ForceFormat("rawvideo")
                     .WithCustomArgument($"-pix_fmt bgra -s {width}x{height}"))
-                .OutputToFile(outputPath, overwrite: true, opts => opts
-                    .WithVideoCodec("libx264")
-                    .WithConstantRateFactor(23)
-                    .WithCustomArgument("-preset ultrafast")
-                    .WithCustomArgument("-pix_fmt yuv420p"))
+                .OutputToFile(outputPath, overwrite: true, opts =>
+                {
+                    opts.WithVideoCodec(videoEncoder)
+                        .WithCustomArgument("-pix_fmt yuv420p");
+
+                    if (videoEncoder == "libx264")
+                    {
+                        opts.WithConstantRateFactor(23)
+                            .WithCustomArgument("-preset ultrafast");
+                    }
+                    else if (videoEncoder == "h264_nvenc")
+                    {
+                        opts.WithConstantRateFactor(23)   // -cq для nvenc
+                            .WithCustomArgument("-preset p1")
+                            .WithCustomArgument("-rc vbr")
+                            .WithCustomArgument("-b:v 0");
+                    }
+                    else if (videoEncoder == "h264_amf")
+                    {
+                        opts.WithCustomArgument("-quality speed")
+                            .WithCustomArgument("-rc cqp -qp_i 23 -qp_p 23");
+                    }
+                    else if (videoEncoder == "h264_qsv")
+                    {
+                        opts.WithCustomArgument("-preset veryfast")
+                            .WithCustomArgument("-global_quality 23");
+                    }
+                })
                 .CancellableThrough(token)
                 .ProcessAsynchronously();
  
@@ -244,6 +329,10 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                 Log("Encode finished — MP4 fully written.");
             else
                 Log("Encode finished with errors or was force cancelled.");
+        }
+        catch (OperationCanceledException)
+        {
+            Log("Encode cancelled — normal shutdown.");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -285,40 +374,52 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             using var texture = new ID3D11Texture2D(texturePtr);
             var desc= texture.Description;
  
-            var stagingDesc = new Texture2DDescription
+            lock (_stagingLock)
             {
-                Width             = desc.Width,
-                Height            = desc.Height,
-                MipLevels         = 1,
-                ArraySize         = 1,
-                Format            = desc.Format,
-                SampleDescription = new SampleDescription(1, 0),
-                Usage             = ResourceUsage.Staging,
-                BindFlags         = BindFlags.None,
-                CPUAccessFlags    = CpuAccessFlags.Read,
-            };
- 
-            using var staging = _d3dDevice.CreateTexture2D(stagingDesc);
-            _d3dContext.CopyResource(staging, texture);
- 
-            var mapped = _d3dContext.Map(staging, 0, MapMode.Read, MapFlags.None);
-            try
-            {
-                var data = new byte[width * height * 4];
-                unsafe
+                if (_stagingTexture is null || _stagingSize != (desc.Width, desc.Height))
                 {
-                    byte* src = (byte*)mapped.DataPointer;
-                    for (int y = 0; y < height; y++)
+                    _stagingTexture?.Dispose();
+
+                    var stagingDesc = new Texture2DDescription
                     {
-                        new ReadOnlySpan<byte>(src + y * mapped.RowPitch, width * 4)
-                            .CopyTo(new Span<byte>(data, y * width * 4, width * 4));
-                    }
+                        Width             = desc.Width,
+                        Height            = desc.Height,
+                        MipLevels         = 1,
+                        ArraySize         = 1,
+                        Format            = desc.Format,
+                        SampleDescription = new SampleDescription(1, 0),
+                        Usage             = ResourceUsage.Staging,
+                        BindFlags         = BindFlags.None,
+                        CPUAccessFlags    = CpuAccessFlags.Read,
+                    };
+
+                    _stagingTexture = _d3dDevice.CreateTexture2D(stagingDesc);
+                    _stagingSize    = ((int W, int H))(desc.Width, desc.Height);
+
+                    Log($"StagingTexture (re)created: {desc.Width}×{desc.Height}");
                 }
-                return data;
-            }
-            finally
-            {
-                _d3dContext.Unmap(staging, 0);
+
+                _d3dContext.CopyResource(_stagingTexture, texture);
+
+                var mapped = _d3dContext.Map(_stagingTexture, 0, MapMode.Read, MapFlags.None);
+                try
+                {
+                    var data = ArrayPool<byte>.Shared.Rent(width * height * 4);
+                    unsafe
+                    {
+                        byte* src = (byte*)mapped.DataPointer;
+                        for (int y = 0; y < height; y++)
+                        {
+                            new ReadOnlySpan<byte>(src + y * mapped.RowPitch, width * 4)
+                                .CopyTo(new Span<byte>(data, y * width * 4, width * 4));
+                        }
+                    }
+                    return data;
+                }
+                finally
+                {
+                    _d3dContext.Unmap(_stagingTexture, 0);
+                }
             }
         }
         catch (Exception ex)
@@ -348,15 +449,9 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         _encodeTask?.Wait(TimeSpan.FromSeconds(5));
  
         _cts?.Dispose();
-        _d3dContext?.Dispose();
-        _d3dDevice?.Dispose();
+ 
+        ResetD3DState();
     }
-    
-    [DllImport("d3d11.dll", EntryPoint = "CreateDirect3D11DeviceFromDXGIDevice",
-        SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true,
-        CallingConvention = CallingConvention.StdCall)]
-    private static extern int CreateDirect3D11DeviceFromDXGIDevice(
-        IntPtr dxgiDevice, out IntPtr graphicsDevice);
 }
 
 [ComImport]
