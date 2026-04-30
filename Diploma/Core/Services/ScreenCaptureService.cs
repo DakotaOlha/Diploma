@@ -240,15 +240,11 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             reader.WaitToReadAsync(ct).AsTask().Wait(ct);
 
             timeBeginPeriod(1);
+            
             try
             {
-                BgraVideoFrame? prevFrame = null;
-
                 while (!ct.IsCancellationRequested)
                 {
-                    prevFrame?.Return();
-                    prevFrame = null;
-
                     while (reader.TryRead(out var newFrame))
                     {
                         if (lastFrame != null && !ReferenceEquals(lastFrame, newFrame))
@@ -260,8 +256,9 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                     if (lastFrame == null)
                         break;
 
-                    prevFrame = lastFrame;
-                    yield return lastFrame;
+                    var frameToYield = lastFrame;
+                    yield return frameToYield;
+                    frameToYield.Return();
                     frameIndex++;
 
                     double targetMs = frameIndex * frameDuration;
@@ -270,8 +267,6 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                     if (sleepMs > 0)
                         Thread.Sleep((int)sleepMs);
                 }
-
-                prevFrame?.Return();
             }
             finally
             {
