@@ -145,9 +145,6 @@ public partial class MainViewModel : ObservableObject
         App.Current.Dispatcher.Invoke(() =>
             ((App)App.Current).GetOverlay().SetOutputPath(videoPath));
         
-        var started = await _captureService.StartAsync(videoPath);
-        if (!started) return;
-        
         _currentSessionId = await _logService.StartSessionAsync(
             name: $"Session {DateTime.Now:dd.MM.yyyy HH:mm}",
             mode: mode,
@@ -162,7 +159,14 @@ public partial class MainViewModel : ObservableObject
         _inputMonitor.AddWatchPath(
             Environment.GetFolderPath(Environment.SpecialFolder.Desktop));
 
-        await _captureService.StartAsync(videoPath);
+        var started = await _captureService.StartAsync(videoPath);
+        if (!started)
+        {
+            await _logService.EndSessionAsync(_currentSessionId);
+            _inputMonitor.Stop();
+            return;
+        }
+        
         IsRecording = true;
     }
 
