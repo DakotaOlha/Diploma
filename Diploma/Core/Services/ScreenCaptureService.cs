@@ -25,8 +25,6 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     private const int ChannelCapacity = 8;
     private const int FirstFrameTimeoutMs   = 5_000;
     private const int FFmpegShutdownTimeoutMs = 30_000;
-    private const int FirstFrameTimeoutSeconds = 5;
-    private const int FramePoolBufferCount = 2;
     
     private CancellationTokenSource? _cts;
     private Task? _captureTask;
