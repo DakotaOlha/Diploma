@@ -3,6 +3,7 @@ using System.Windows;
 using Diploma.Core.Interfaces;
 using Diploma.Core.Services;
 using Diploma.Data.Database;
+using Diploma.Helpers;
 using Diploma.ViewModels;
 using Diploma.Views;
 using Microsoft.Extensions.DependencyInjection;
@@ -54,8 +55,32 @@ public partial class App : Application
             .Build();
         
         await _host.StartAsync();
+
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+        var splash = new SplashWindow();
+        splash.Show();
+        try
+        {
+            await Task.Run(HardwareEncoderDetector.Detect);
+            splash.SetStatus("Ready.");
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "HardwareEncoderDetector warm-up failed; will retry on first record");
+            splash.SetStatus("Encoder probe failed — software fallback will be used.");
+            await Task.Delay(1_500);
+        }
+        finally
+        {
+            splash.Close();
+        }
         
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+
+        ShutdownMode = ShutdownMode.OnMainWindowClose;
+        MainWindow   = mainWindow;
+
         mainWindow.Show();
         
         var hotkeyService = _host.Services.GetRequiredService<IGlobalHotkeyService>();
