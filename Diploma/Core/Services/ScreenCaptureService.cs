@@ -25,8 +25,6 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     private const int ChannelCapacity = 8;
     private const int FirstFrameTimeoutMs   = 5_000;
     private const int FFmpegShutdownTimeoutMs = 30_000;
-    private const int FirstFrameTimeoutSeconds = 5;
-    private const int FramePoolBufferCount = 2;
     
     private CancellationTokenSource? _cts;
     private Task? _captureTask;
@@ -101,21 +99,12 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         
         try
         {
-
-            if (item == null)
-            {
-                _isRecording = false;
-                writer.Complete();
-                return;
-            }
-            
-            CaptureTargetSelected?.Invoke(this, EventArgs.Empty);
             Log("Capture target selected, initialising D3D…");
             
             var winrtDevice = CreateD3DDevice();
             int width  = item.Size.Width;
             int height = item.Size.Height;
- 
+                
             Direct3D11CaptureFramePool? framePool = null;
             GraphicsCaptureSession?     session   = null;
  
@@ -149,7 +138,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             using var firstFrameCts = new CancellationTokenSource(FirstFrameTimeoutMs);
             using var linked        = CancellationTokenSource.CreateLinkedTokenSource(
                                           token, firstFrameCts.Token);
- 
+            
             bool gotFirstFrame = false;
             try
             {
@@ -176,7 +165,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             Log("First frame received — starting encode…");
             RecordingStarted?.Invoke(this, EventArgs.Empty);
  
-            _encodeTask = Task.Run(() => EncodeLoopAsync(outputPath, width, height));
+            _encodeTask = Task.Run(() => EncodeLoopAsync(outputPath, width, height, token));
  
             try { await Task.Delay(Timeout.Infinite, token); }
             catch (OperationCanceledException) { }
@@ -197,54 +186,44 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         }
     }
     
-    private async Task EncodeLoopAsync(string outputPath, int width, int height)
+    private async Task EncodeLoopAsync(string outputPath, int width, int height, CancellationToken token)
     {
-        IEnumerable<IVideoFrame> FrameSource()
+        IEnumerable<IVideoFrame> FrameSource(CancellationToken ct)
         {
             var reader = _frameChannel!.Reader;
             var sw = System.Diagnostics.Stopwatch.StartNew();
             long frameIndex = 0;
-            double frameDuration = 1000.0 / TargetFrameRate; // 33.333 мс для 30 FPS
+            double frameDuration = 1000.0 / TargetFrameRate;
             BgraVideoFrame? lastFrame = null;
  
-            var waitTask = reader.WaitToReadAsync().AsTask();
-            waitTask.Wait();
+            reader.WaitToReadAsync(ct).AsTask().Wait(ct);
             
-            while (true)
+            while (!ct.IsCancellationRequested)
             {
                 while (reader.TryRead(out var newFrame))
                 {
                     lastFrame = newFrame;
                 }
 
-                if (lastFrame == null || (!_isRecording && reader.Completion.IsCompleted))
-                {
+                if (lastFrame == null)
                     break;
-                }
 
                 yield return lastFrame;
                 frameIndex++;
 
                 double targetMs = frameIndex * frameDuration;
-                double currentMs = sw.Elapsed.TotalMilliseconds;
-                double sleepMs = targetMs - currentMs;
+                double sleepMs  = targetMs - sw.Elapsed.TotalMilliseconds;
 
                 if (sleepMs > 0)
-                {
                     Thread.Sleep((int)sleepMs);
-                }
             }
         }
  
-        var videoSource = new RawVideoPipeSource(FrameSource()) { FrameRate = TargetFrameRate };
+        var videoSource = new RawVideoPipeSource(FrameSource(token)) { FrameRate = TargetFrameRate };
  
         try
         {
             Log("FFmpeg encode started…");
- 
-            using var forceCts     = new CancellationTokenSource();
-            
-            _cts?.Token.Register(() => forceCts.CancelAfter(FFmpegShutdownTimeoutMs));
             
             var encodeTask = FFMpegArguments
                 .FromPipeInput(videoSource, opts => opts
@@ -256,7 +235,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                     .WithConstantRateFactor(23)
                     .WithCustomArgument("-preset ultrafast")
                     .WithCustomArgument("-pix_fmt yuv420p"))
-                .CancellableThrough(forceCts.Token)
+                .CancellableThrough(token)
                 .ProcessAsynchronously();
  
             var success = await encodeTask;
@@ -304,7 +283,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             if (texturePtr == IntPtr.Zero) return null;
  
             using var texture = new ID3D11Texture2D(texturePtr);
-            var desc          = texture.Description;
+            var desc= texture.Description;
  
             var stagingDesc = new Texture2DDescription
             {
