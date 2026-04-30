@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Buffers;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Channels;
 using System.Windows;
@@ -167,7 +168,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                     var bytes = ConvertFrameToBytes(frame, width, height);
                     if (bytes is null) return;
  
-                    var videoFrame = new BgraVideoFrame(bytes, width, height);
+                    var videoFrame = new BgraVideoFrame(bytes, width, height, pooled: true);
                     
                     writer.TryWrite(videoFrame);
                 };
@@ -238,16 +239,23 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
  
             reader.WaitToReadAsync(ct).AsTask().Wait(ct);
             
+            BgraVideoFrame? prevFrame = null;
+            
             while (!ct.IsCancellationRequested)
             {
+                prevFrame?.Return();
+                prevFrame = null;
+
                 while (reader.TryRead(out var newFrame))
                 {
+                    if (lastFrame != null && !ReferenceEquals(lastFrame, newFrame))
+                        lastFrame.Return();
                     lastFrame = newFrame;
                 }
 
-                if (lastFrame == null)
-                    break;
+                if (lastFrame == null) break;
 
+                prevFrame = lastFrame;
                 yield return lastFrame;
                 frameIndex++;
 
@@ -257,6 +265,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                 if (sleepMs > 0)
                     Thread.Sleep((int)sleepMs);
             }
+            prevFrame?.Return();
         }
  
         var videoSource = new RawVideoPipeSource(FrameSource(token)) { FrameRate = TargetFrameRate };
@@ -384,7 +393,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                 var mapped = _d3dContext.Map(_stagingTexture, 0, MapMode.Read, MapFlags.None);
                 try
                 {
-                    var data = new byte[width * height * 4];
+                    var data = ArrayPool<byte>.Shared.Rent(width * height * 4);
                     unsafe
                     {
                         byte* src = (byte*)mapped.DataPointer;
