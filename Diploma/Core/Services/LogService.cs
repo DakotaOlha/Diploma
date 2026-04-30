@@ -1,4 +1,5 @@
-﻿using Diploma.Core.Interfaces;
+﻿using System.Collections.Concurrent;
+using Diploma.Core.Interfaces;
 using Diploma.Core.Models;
 using Dapper;
 using Microsoft.Data.Sqlite;
@@ -9,7 +10,7 @@ public class LogService : ILogService
 {
     private readonly string _connectionString;
 
-    private readonly Dictionary<int, DateTime> _sessionStarts = new();
+    private readonly ConcurrentDictionary<int, DateTime> _sessionStarts = new();
 
     public LogService(string connectionString)
     {
@@ -55,7 +56,7 @@ public class LogService : ILogService
             Id      = sessionId
         });
         
-        _sessionStarts.Remove(sessionId);
+        _sessionStarts.TryRemove(sessionId, out _);
     }
     
     public async Task DeleteSessionAsync(int sessionId)
@@ -65,7 +66,7 @@ public class LogService : ILogService
         using var conn = CreateConnection();
         await conn.ExecuteAsync(sql, new { Id = sessionId });
      
-        _sessionStarts.Remove(sessionId);
+        _sessionStarts.TryRemove(sessionId, out _);
     }
 
     public async Task<RecordingSession?> GetSessionAsync(int sessionId)
