@@ -10,7 +10,6 @@ public static class CapturePickerHelper
     {
         var picker = new GraphicsCapturePicker();
 
-        // WinRT.Interop.InitializeWithWindow — правильний спосіб
         InitializeWithWindow.Initialize(picker, hwnd);
 
         return await picker.PickSingleItemAsync();
