@@ -5,6 +5,7 @@ using Diploma.Core.Models;
 using LibVLCSharp.Shared;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows.Threading;
 
 namespace Diploma.ViewModels;
 
@@ -14,6 +15,7 @@ public partial class PlayerViewModel : ObservableObject, IDisposable
     public MediaPlayer MediaPlayer { get; }
 
     private readonly ILogService _logService;
+    private readonly Dispatcher _dispatcher;
     private bool _disposed;
 
     [ObservableProperty] private bool _isPlaying;
@@ -33,6 +35,7 @@ public partial class PlayerViewModel : ObservableObject, IDisposable
     public PlayerViewModel(ILogService logService)
     {
         _logService = logService;
+        _dispatcher  = Dispatcher.CurrentDispatcher;
 
         LibVLCSharp.Shared.Core.Initialize();
         _libVlc = new LibVLC(enableDebugLogs: false);
@@ -213,8 +216,13 @@ public partial class PlayerViewModel : ObservableObject, IDisposable
         TimeLabel = $"{current:hh\\:mm\\:ss} / {total:hh\\:mm\\:ss}";
     }
 
-    private static void Dispatch(Action action) =>
-        System.Windows.Application.Current.Dispatcher.Invoke(action);
+    private void Dispatch(Action action)
+    {
+        if (_dispatcher.HasShutdownStarted)
+            return;
+
+        _dispatcher.Invoke(action);
+    }
 
     public void Dispose()
     {

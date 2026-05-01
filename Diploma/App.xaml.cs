@@ -94,6 +94,9 @@ public partial class App : Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
+        var player = _host.Services.GetRequiredService<PlayerViewModel>();
+        player.Dispose();
+        
         await _host.StopAsync();
         Log.CloseAndFlush();
         base.OnExit(e);
