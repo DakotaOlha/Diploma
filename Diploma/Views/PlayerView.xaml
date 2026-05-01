@@ -7,7 +7,8 @@
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-        <helpers:IsActiveEntryConverter x:Key="IsActiveEntry"/>
+        <helpers:IsActiveEntryConverter    x:Key="IsActiveEntry"/>
+        <helpers:EventTypeToColorConverter x:Key="EventTypeToColor"/>
     </UserControl.Resources>
 
     <Grid>
@@ -65,20 +66,7 @@
                     <DataGrid.RowStyle>
                         <Style TargetType="DataGridRow">
                             <Style.Triggers>
-                                <!--
-                                    MultiBinding compares this row's LogEntry (values[0])
-                                    with PlayerViewModel.ActiveEntry (values[1]) by reference.
-                                    O(1) per visible row — no IsActive property needed on the model.
-                                    WPF re-evaluates only visible rows thanks to row virtualisation.
-                                -->
-                                <DataTrigger Value="True">
-                                    <DataTrigger.Binding>
-                                        <MultiBinding Converter="{StaticResource IsActiveEntry}">
-                                            <Binding/>
-                                            <Binding Path="DataContext.ActiveEntry"
-                                                     RelativeSource="{RelativeSource AncestorType=DataGrid}"/>
-                                        </MultiBinding>
-                                    </DataTrigger.Binding>
+                                <DataTrigger Binding="{Binding IsActive}" Value="True">
                                     <Setter Property="Background" Value="#1A1E88E5"/>
                                     <Setter Property="FontWeight" Value="Medium"/>
                                 </DataTrigger>
@@ -118,6 +106,29 @@
                 BorderBrush="#22000000"
                 Padding="12,8">
             <StackPanel>
+                <Border Height="36"
+                        Background="#0DFFFFFF"
+                        BorderBrush="#22FFFFFF"
+                        BorderThickness="0,1,0,1"
+                        Margin="0,0,0,6"
+                        ClipToBounds="True"
+                        Visibility="{Binding HasMedia, Converter={StaticResource BoolToVis}}">
+                    <Grid>
+                        <Canvas x:Name="TimelineCanvas"
+                                ClipToBounds="True"
+                                SizeChanged="TimelineCanvas_SizeChanged"/>
+
+                        <Rectangle x:Name="Playhead"
+                                   Width="2" Height="36"
+                                   Fill="#CCFFFFFF"
+                                   HorizontalAlignment="Left"
+                                   IsHitTestVisible="False">
+                            <Rectangle.RenderTransform>
+                                <TranslateTransform x:Name="PlayheadTranslate" X="0"/>
+                            </Rectangle.RenderTransform>
+                        </Rectangle>
+                    </Grid>
+                </Border>
 
                 <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>
