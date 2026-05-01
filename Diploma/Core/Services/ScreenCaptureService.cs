@@ -62,6 +62,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     [DllImport("d3d11.dll", EntryPoint = "CreateDirect3D11DeviceFromDXGIDevice",
         SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true,
         CallingConvention = CallingConvention.StdCall)]
+    
     private static extern int CreateDirect3D11DeviceFromDXGIDevice(
         IntPtr dxgiDevice, out IntPtr graphicsDevice);
 
@@ -237,8 +238,12 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             double frameDuration = 1000.0 / TargetFrameRate;
             BgraVideoFrame? lastFrame = null;
 
-            reader.WaitToReadAsync(ct).AsTask().Wait(ct);
-
+            while (!ct.IsCancellationRequested && !reader.TryRead(out lastFrame))
+                Thread.SpinWait(100);
+ 
+            if (ct.IsCancellationRequested || lastFrame is null)
+                yield break;
+ 
             timeBeginPeriod(1);
             
             try
@@ -247,9 +252,9 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                 {
                     while (reader.TryRead(out var newFrame))
                     {
-                        if (lastFrame != null && !ReferenceEquals(lastFrame, newFrame))
+                        if (!ReferenceEquals(lastFrame, newFrame))
                             lastFrame.Return();
-
+ 
                         lastFrame = newFrame;
                     }
 
