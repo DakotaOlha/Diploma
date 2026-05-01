@@ -131,7 +131,7 @@
                         <Canvas x:Name="TimelineCanvas"
                                 Height="36"
                                 VerticalAlignment="Center"
-                                IsHitTestVisible="False"
+                                Background="Transparent"
                                 ClipToBounds="True"
                                 Visibility="{Binding HasMedia, Converter={StaticResource BoolToVis}}"
                                 SizeChanged="TimelineCanvas_SizeChanged">
