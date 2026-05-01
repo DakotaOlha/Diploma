@@ -1,7 +1,8 @@
 ﻿<Application x:Class="Diploma.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:hc="https://handyorg.github.io/handycontrol">
+             xmlns:hc="https://handyorg.github.io/handycontrol"
+             xmlns:tb="http://www.hardcodet.net/taskbar">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -9,6 +10,24 @@
                 <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/Theme.xaml"/>
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+            <tb:TaskbarIcon x:Key="TrayIcon"
+                            IconSource="/Assets/tray.ico"
+                            ToolTipText="AlgoReplay"
+                            TrayMouseDoubleClick="TrayIcon_DoubleClick">
+                <tb:TaskbarIcon.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Відкрити"
+                                  FontWeight="SemiBold"
+                                  Click="TrayOpen_Click"/>
+                        <MenuItem Header="Старт / Стоп запису"
+                                  Click="TrayStartStop_Click"/>
+                        <Separator/>
+                        <MenuItem Header="Вийти"
+                                  Click="TrayExit_Click"/>
+                    </ContextMenu>
+                </tb:TaskbarIcon.ContextMenu>
+            </tb:TaskbarIcon>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
