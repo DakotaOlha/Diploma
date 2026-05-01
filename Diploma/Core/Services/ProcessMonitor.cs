@@ -33,15 +33,16 @@ public class ProcessMonitor : IDisposable
 
     public void Start(int sessionId)
     {
-        if (_disposed) return;
+        if (_disposed || _isRunning) return;
+        
         _sessionId = sessionId;
         _isRunning = true;
         
         _runningIdes.Clear();
         foreach (var ide in GetRunningIdes())
-        {  
             _runningIdes.Add(ide);
-        }
+        
+        _timer?.Dispose();
         _timer = new Timer(Tick, null, 4000, 4000);
     }
 
