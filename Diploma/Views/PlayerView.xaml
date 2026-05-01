@@ -7,37 +7,36 @@
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-        <helpers:IsActiveEntryConverter x:Key="IsActiveEntry"/>
+        <helpers:IsActiveEntryConverter    x:Key="IsActiveEntry"/>
+        <helpers:EventTypeToColorConverter x:Key="EventTypeToColor"/>
     </UserControl.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="*"/>  
-            <RowDefinition Height="Auto"/> 
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="2*"/>  
+                <ColumnDefinition Width="2*"/>
                 <ColumnDefinition Width="4"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
             <Grid Grid.Column="0" Background="#FF111111">
-
                 <vlc:VideoView x:Name="VideoView"
                                HorizontalAlignment="Stretch"
                                VerticalAlignment="Stretch"/>
-
                 <TextBlock Text="Відео не знайдено або сесія не вибрана"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            Foreground="#888" FontSize="14"
-                           Visibility="{Binding HasMedia,
-                                        Converter={StaticResource BoolToVis}}"/>
+                           Visibility="{Binding HasMedia, Converter={StaticResource BoolToVis}}"/>
             </Grid>
 
-            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
+            <GridSplitter Grid.Column="1" Width="4"
+                          HorizontalAlignment="Stretch"
                           Background="#22000000"/>
 
             <Grid Grid.Column="2">
@@ -65,12 +64,6 @@
                     <DataGrid.RowStyle>
                         <Style TargetType="DataGridRow">
                             <Style.Triggers>
-                                <!--
-                                    MultiBinding compares this row's LogEntry (values[0])
-                                    with PlayerViewModel.ActiveEntry (values[1]) by reference.
-                                    O(1) per visible row — no IsActive property needed on the model.
-                                    WPF re-evaluates only visible rows thanks to row virtualisation.
-                                -->
                                 <DataTrigger Value="True">
                                     <DataTrigger.Binding>
                                         <MultiBinding Converter="{StaticResource IsActiveEntry}">
@@ -96,7 +89,6 @@
                         <DataGridTextColumn Header="Опис"
                                             Binding="{Binding Description}"
                                             Width="*"/>
-
                         <DataGridTemplateColumn Width="65">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
@@ -125,15 +117,36 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <Slider Grid.Column="0"
-                            x:Name="SeekSlider"
-                            Minimum="0"
-                            Maximum="{Binding DurationMs}"
-                            Value="{Binding PositionMs, Mode=OneWay}"
-                            IsEnabled="{Binding HasMedia}"
-                            VerticalAlignment="Center"
-                            Thumb.DragCompleted="SeekSlider_DragCompleted"
-                            PreviewMouseLeftButtonUp="SeekSlider_MouseUp"/>
+                    <Grid Grid.Column="0">
+
+                        <Slider x:Name="SeekSlider"
+                                Minimum="0"
+                                Maximum="{Binding DurationMs}"
+                                Value="{Binding PositionMs, Mode=OneWay}"
+                                IsEnabled="{Binding HasMedia}"
+                                VerticalAlignment="Center"
+                                Thumb.DragCompleted="SeekSlider_DragCompleted"
+                                PreviewMouseLeftButtonUp="SeekSlider_MouseUp"/>
+
+                        <Canvas x:Name="TimelineCanvas"
+                                Height="36"
+                                VerticalAlignment="Center"
+                                Background="Transparent"
+                                ClipToBounds="True"
+                                Visibility="{Binding HasMedia, Converter={StaticResource BoolToVis}}"
+                                SizeChanged="TimelineCanvas_SizeChanged">
+
+                            <Rectangle x:Name="Playhead"
+                                       Width="2" Height="36"
+                                       Fill="#CCFFFFFF"
+                                       IsHitTestVisible="False"
+                                       Canvas.Top="0" Canvas.Left="0">
+                                <Rectangle.RenderTransform>
+                                    <TranslateTransform x:Name="PlayheadTranslate" X="0"/>
+                                </Rectangle.RenderTransform>
+                            </Rectangle>
+                        </Canvas>
+                    </Grid>
 
                     <TextBlock Grid.Column="1"
                                Text="{Binding TimeLabel}"
@@ -143,7 +156,6 @@
                 </Grid>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-
                     <Button Content="⏮"
                             FontSize="16" Width="40" Height="34"
                             Command="{Binding StopCommand}"
@@ -176,6 +188,5 @@
 
             </StackPanel>
         </Border>
-
     </Grid>
 </UserControl>
