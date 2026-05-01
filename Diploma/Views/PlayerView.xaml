@@ -2,10 +2,12 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:hc="https://handyorg.github.io/handycontrol"
-             xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF">
+             xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+             xmlns:helpers="clr-namespace:Diploma.Helpers">
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <helpers:IsActiveEntryConverter x:Key="IsActiveEntry"/>
     </UserControl.Resources>
 
     <Grid>
@@ -63,7 +65,20 @@
                     <DataGrid.RowStyle>
                         <Style TargetType="DataGridRow">
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                <!--
+                                    MultiBinding compares this row's LogEntry (values[0])
+                                    with PlayerViewModel.ActiveEntry (values[1]) by reference.
+                                    O(1) per visible row — no IsActive property needed on the model.
+                                    WPF re-evaluates only visible rows thanks to row virtualisation.
+                                -->
+                                <DataTrigger Value="True">
+                                    <DataTrigger.Binding>
+                                        <MultiBinding Converter="{StaticResource IsActiveEntry}">
+                                            <Binding/>
+                                            <Binding Path="DataContext.ActiveEntry"
+                                                     RelativeSource="{RelativeSource AncestorType=DataGrid}"/>
+                                        </MultiBinding>
+                                    </DataTrigger.Binding>
                                     <Setter Property="Background" Value="#1A1E88E5"/>
                                     <Setter Property="FontWeight" Value="Medium"/>
                                 </DataTrigger>
