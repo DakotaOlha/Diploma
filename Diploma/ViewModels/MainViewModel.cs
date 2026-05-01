@@ -84,6 +84,12 @@ public partial class MainViewModel : ObservableObject
             await App.Current.Dispatcher.InvokeAsync(async () => await AddMarkerAsync());
         };
         
+        _hotkeyService.ScreenshotRequested += async (_, _) =>
+        {
+            await App.Current.Dispatcher.InvokeAsync(async () =>
+                await TakeScreenshotAsync());
+        };
+        
         _captureService.StatusChanged  += (_, msg) => StatusText = msg;
         
         _captureService.CaptureTargetSelected += (_, _) =>
@@ -236,6 +242,43 @@ public partial class MainViewModel : ObservableObject
                 EventTypes.ManualMarker,
                 dialog.MarkerText);
         });
+    }
+    
+    [RelayCommand]
+    private async Task TakeScreenshotAsync()
+    {
+        if (!IsRecording) return;
+
+        var bitmap = _captureService.GetLatestFrameAsBitmap();
+        if (bitmap is null)
+        {
+            StatusText = "Скріншот не вдався — кадр ще не отримано";
+            return;
+        }
+
+        var dir = System.IO.Path.GetDirectoryName(_currentVideoPath)!;
+        var screenshotDir = System.IO.Path.Combine(dir, "screenshots");
+        Directory.CreateDirectory(screenshotDir);
+
+        var fileName   = $"screenshot_{DateTime.Now:yyyyMMdd_HHmmss_fff}.png";
+        var outputPath = System.IO.Path.Combine(screenshotDir, fileName);
+
+        await App.Current.Dispatcher.InvokeAsync(() =>
+        {
+            var window = new ScreenshotAnnotationWindow(bitmap, outputPath);
+            window.ShowDialog();
+        });
+
+        if (File.Exists(outputPath))
+        {
+            await _logService.LogEventAsync(
+                _currentSessionId,
+                EventTypes.Screenshot,
+                $"Скріншот: {System.IO.Path.GetFileName(outputPath)}",
+                metadata: outputPath);
+
+            StatusText = $"Скріншот збережено";
+        }
     }
     
     partial void OnIsRecordingChanged(bool value)

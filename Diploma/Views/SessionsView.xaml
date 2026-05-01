@@ -61,6 +61,8 @@
                                     Command="{Binding DataContext.DeleteSessionCommand,
                                               RelativeSource={RelativeSource AncestorType=ListBox}}"
                                     CommandParameter="{Binding}"/>
+                            
+                            
 
                             <TextBlock Grid.Row="1" Grid.ColumnSpan="2"
                                        FontSize="11" Foreground="#888"
@@ -107,6 +109,30 @@
                               hc:InfoElement.Placeholder="Пошук подій..."
                               VerticalAlignment="Center"/>
             </Grid>
+            
+            <StackPanel Grid.Row="1"
+                        Orientation="Horizontal"
+                        Margin="12,0,12,8"
+                        IsEnabled="{Binding HasSession}">
+                <TextBlock Text="Експорт:"
+                           VerticalAlignment="Center"
+                           Opacity="0.6"
+                           Margin="0,0,8,0"/>
+                <Button Content="JSON"
+                        Padding="10,4"
+                        Margin="0,0,4,0"
+                        Command="{Binding ExportJsonCommand}"
+                        ToolTip="Експортувати як JSON"/>
+                <Button Content="Markdown"
+                        Padding="10,4"
+                        Margin="0,0,4,0"
+                        Command="{Binding ExportMarkdownCommand}"
+                        ToolTip="Експортувати як Markdown таблицю"/>
+                <Button Content="YouTube"
+                        Padding="10,4"
+                        Command="{Binding ExportYouTubeChaptersCommand}"
+                        ToolTip="Експортувати розділи для YouTube"/>
+            </StackPanel>
 
             <TextBlock Grid.Row="2"
                        Text="← Виберіть сесію зі списку"

@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Diploma.Core.Interfaces;
 using Diploma.Core.Models;
+using Diploma.Core.Services;
 
 namespace Diploma.ViewModels;
 
@@ -16,6 +17,8 @@ public partial class SessionsViewModel : ObservableObject
 
     public ObservableCollection<RecordingSession> Sessions { get; } = new();
     public ObservableCollection<LogEntry> Entries { get; } = new();
+    
+    private readonly ExportService _exportService;
 
     [ObservableProperty]
     private RecordingSession? _selectedSession;
@@ -44,10 +47,11 @@ public partial class SessionsViewModel : ObservableObject
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
 
-    public SessionsViewModel(ILogService logService, PlayerViewModel playerViewModel)
+    public SessionsViewModel(ILogService logService, PlayerViewModel playerViewModel, ExportService exportService)
     {
-        _logService = logService;
+        _logService      = logService;
         _playerViewModel = playerViewModel;
+        _exportService   = exportService;
     }
 
     [RelayCommand]
@@ -69,6 +73,43 @@ public partial class SessionsViewModel : ObservableObject
         {
             IsLoading = false;
         }
+    }
+    
+    [RelayCommand]
+    private async Task ExportJsonAsync()
+    {
+        if (SelectedSession is null) return;
+        var path = PickSavePath("JSON файл|*.json", $"{SelectedSession.Name}.json");
+        if (path is null) return;
+        await _exportService.ExportJsonAsync(SelectedSession.Id, path);
+    }
+
+    [RelayCommand]
+    private async Task ExportMarkdownAsync()
+    {
+        if (SelectedSession is null) return;
+        var path = PickSavePath("Markdown файл|*.md", $"{SelectedSession.Name}.md");
+        if (path is null) return;
+        await _exportService.ExportMarkdownAsync(SelectedSession.Id, path);
+    }
+
+    [RelayCommand]
+    private async Task ExportYouTubeChaptersAsync()
+    {
+        if (SelectedSession is null) return;
+        var path = PickSavePath("Text файл|*.txt", $"{SelectedSession.Name}_chapters.txt");
+        if (path is null) return;
+        await _exportService.ExportYouTubeChaptersAsync(SelectedSession.Id, path);
+    }
+    
+    private static string? PickSavePath(string filter, string defaultName)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter   = filter,
+            FileName = defaultName
+        };
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
     }
 
     private async Task LoadEntriesAsync(int sessionId)
