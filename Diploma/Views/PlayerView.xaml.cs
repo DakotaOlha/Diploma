@@ -29,7 +29,8 @@ public partial class PlayerView : UserControl
             VideoView.MediaPlayer = _vm.MediaPlayer;
             _vm.PropertyChanged += OnVmPropertyChanged;
             _vm.Entries.CollectionChanged += OnEntriesCollectionChanged;
-
+            
+            TimelineCanvas.MouseLeftButtonDown -= OnCanvasMouseLeftButtonDown;
             TimelineCanvas.MouseLeftButtonDown += OnCanvasMouseLeftButtonDown;
         };
 
