@@ -29,11 +29,28 @@ public partial class PlayerView : UserControl
             VideoView.MediaPlayer = _vm.MediaPlayer;
             _vm.PropertyChanged += OnVmPropertyChanged;
             _vm.Entries.CollectionChanged += OnEntriesCollectionChanged;
+
+            TimelineCanvas.MouseLeftButtonDown += OnCanvasMouseLeftButtonDown;
         };
 
         SeekSlider.AddHandler(
             Thumb.DragStartedEvent,
             new DragStartedEventHandler((_, _) => _isDragging = true));
+    }
+
+    private void OnCanvasMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var x        = e.GetPosition(TimelineCanvas).X;
+        var width    = TimelineCanvas.ActualWidth;
+        var duration = _vm.DurationMs;
+
+        if (width <= 0 || duration <= 0) return;
+
+        var ratio  = Math.Clamp(x / width, 0.0, 1.0);
+        var timeMs = (long)(ratio * duration);
+        _vm.SeekCommand.Execute(timeMs);
+
+        e.Handled = true;
     }
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -65,14 +82,21 @@ public partial class PlayerView : UserControl
     {
         TimelineCanvas.Children.Clear();
 
+        TimelineCanvas.Children.Add(Playhead);
+
         var width    = TimelineCanvas.ActualWidth;
         var duration = _vm.DurationMs;
-        if (width <= 0 || duration <= 0) return;
+
+        if (width <= 0 || duration <= 0)
+            return;
+
+        const double MarkerWidth = 10.0;
+        const double MarkerHalf  = MarkerWidth / 2.0;
 
         foreach (var entry in _vm.Entries)
         {
-            var ratio = entry.Offset.TotalMilliseconds / duration;
-            var left  = Math.Clamp(ratio * width, 0.0, width - 1.0);
+            var ratio = Math.Clamp(entry.Offset.TotalMilliseconds / duration, 0.0, 1.0);
+            var left  = Math.Clamp(ratio * width - MarkerHalf, 0.0, width - MarkerWidth);
 
             var brush = (Brush)_colorConverter.Convert(
                 entry.EventType, typeof(Brush), null,
@@ -80,11 +104,13 @@ public partial class PlayerView : UserControl
 
             var marker = new Grid
             {
-                Width  = 10,
-                Height = 36,
-                Cursor = Cursors.Hand,
-                Tag    = entry,
-                ToolTip = BuildTooltip(entry),
+                Width            = MarkerWidth,
+                Height           = 36,
+                Cursor           = Cursors.Hand,
+                Tag              = entry,
+                ToolTip          = BuildTooltip(entry),
+                IsHitTestVisible = true,
+                Background       = Brushes.Transparent,
             };
             ToolTipService.SetInitialShowDelay(marker, 150);
 
@@ -117,14 +143,14 @@ public partial class PlayerView : UserControl
                 foreach (UIElement child in marker.Children)
                     if (child is Shape s) s.Opacity = child is Rectangle ? 0.7 : 1.0;
             };
-
-            marker.MouseLeftButtonDown += (_, _) =>
+            marker.MouseLeftButtonDown += (_, args) =>
             {
                 if (marker.Tag is LogEntry e)
                     _vm.JumpToEntryCommand.Execute(e);
+                args.Handled = true;
             };
 
-            Canvas.SetLeft(marker, left - 5);
+            Canvas.SetLeft(marker, left);
             Canvas.SetTop(marker, 0);
             TimelineCanvas.Children.Add(marker);
         }
