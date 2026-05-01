@@ -249,27 +249,35 @@ public partial class MainViewModel : ObservableObject
     {
         if (!IsRecording) return;
 
-        var dir = Path.GetDirectoryName(_currentVideoPath);
-        if (dir is null) return;
+        var bitmap = _captureService.GetLatestFrameAsBitmap();
+        if (bitmap is null)
+        {
+            StatusText = "Скріншот не вдався — кадр ще не отримано";
+            return;
+        }
 
-        var screenshotDir = Path.Combine(dir, "screenshots");
+        var dir = System.IO.Path.GetDirectoryName(_currentVideoPath)!;
+        var screenshotDir = System.IO.Path.Combine(dir, "screenshots");
         Directory.CreateDirectory(screenshotDir);
 
-        var savedPath = await _captureService.TakeScreenshotAsync(screenshotDir);
+        var fileName   = $"screenshot_{DateTime.Now:yyyyMMdd_HHmmss_fff}.png";
+        var outputPath = System.IO.Path.Combine(screenshotDir, fileName);
 
-        if (savedPath is not null)
+        await App.Current.Dispatcher.InvokeAsync(() =>
+        {
+            var window = new ScreenshotAnnotationWindow(bitmap, outputPath);
+            window.ShowDialog();
+        });
+
+        if (File.Exists(outputPath))
         {
             await _logService.LogEventAsync(
                 _currentSessionId,
                 EventTypes.Screenshot,
-                $"Скріншот: {Path.GetFileName(savedPath)}",
-                metadata: savedPath);
+                $"Скріншот: {System.IO.Path.GetFileName(outputPath)}",
+                metadata: outputPath);
 
-            StatusText = $"📸 {Path.GetFileName(savedPath)}";
-        }
-        else
-        {
-            StatusText = "Скріншот не вдався — кадр ще не отримано";
+            StatusText = $"Скріншот збережено";
         }
     }
     

@@ -143,6 +143,20 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
 
         return outputPath;
     }
+    
+    public BitmapSource? GetLatestFrameAsBitmap()
+    {
+        var frame  = _latestFrame;
+        var width  = _latestFrameWidth;
+        var height = _latestFrameHeight;
+        if (frame is null || width == 0 || height == 0) return null;
+
+        var copy = new byte[width * height * 4];
+        Array.Copy(frame, copy, copy.Length);
+
+        return BitmapSource.Create(width, height, 96, 96,
+            PixelFormats.Bgra32, null, copy, width * 4);
+    }
 
     private static void SaveBgraToPng(byte[] bgraData, int width, int height, string path)
     {
