@@ -167,7 +167,7 @@
                                 Minimum="1" Maximum="12" Value="2"
                                 Width="70" VerticalAlignment="Center"
                                 ValueChanged="ThicknessSlider_ValueChanged"/>
-
+                        
                         <!-- Undo -->
                         <Rectangle Width="1" Height="20" Fill="#3A3A3C" Margin="6,0"/>
                         <Button Style="{StaticResource ToolBtn}" Click="Undo_Click"
