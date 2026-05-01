@@ -84,6 +84,12 @@ public partial class MainViewModel : ObservableObject
             await App.Current.Dispatcher.InvokeAsync(async () => await AddMarkerAsync());
         };
         
+        _hotkeyService.ScreenshotRequested += async (_, _) =>
+        {
+            await App.Current.Dispatcher.InvokeAsync(async () =>
+                await TakeScreenshotAsync());
+        };
+        
         _captureService.StatusChanged  += (_, msg) => StatusText = msg;
         
         _captureService.CaptureTargetSelected += (_, _) =>
@@ -236,6 +242,35 @@ public partial class MainViewModel : ObservableObject
                 EventTypes.ManualMarker,
                 dialog.MarkerText);
         });
+    }
+    
+    [RelayCommand]
+    private async Task TakeScreenshotAsync()
+    {
+        if (!IsRecording) return;
+
+        var dir = Path.GetDirectoryName(_currentVideoPath);
+        if (dir is null) return;
+
+        var screenshotDir = Path.Combine(dir, "screenshots");
+        Directory.CreateDirectory(screenshotDir);
+
+        var savedPath = await _captureService.TakeScreenshotAsync(screenshotDir);
+
+        if (savedPath is not null)
+        {
+            await _logService.LogEventAsync(
+                _currentSessionId,
+                EventTypes.Screenshot,
+                $"Скріншот: {Path.GetFileName(savedPath)}",
+                metadata: savedPath);
+
+            StatusText = $"📸 {Path.GetFileName(savedPath)}";
+        }
+        else
+        {
+            StatusText = "Скріншот не вдався — кадр ще не отримано";
+        }
     }
     
     partial void OnIsRecordingChanged(bool value)

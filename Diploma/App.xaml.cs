@@ -44,6 +44,7 @@ public partial class App : Application
                 services.AddSingleton<ModeProfileService>();
                 services.AddSingleton<DiskSpaceService>();
                 services.AddSingleton<MediaMergeService>();
+                services.AddSingleton<ExportService>();
                 services.AddSingleton<MainViewModel>();
                 services.AddSingleton<SessionsViewModel>();
                 services.AddSingleton<SessionsView>();
