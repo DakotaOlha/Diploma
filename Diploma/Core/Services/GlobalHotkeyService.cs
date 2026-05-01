@@ -11,6 +11,7 @@ public class GlobalHotkeyService : IGlobalHotkeyService
     
     public event EventHandler? StartStopRequested;
     public event EventHandler? MarkerRequested;
+    public event EventHandler? ScreenshotRequested;
 
     public void Start()
     {
@@ -34,6 +35,11 @@ public class GlobalHotkeyService : IGlobalHotkeyService
         else if (e.Control && e.Shift && e.KeyCode == Keys.M)
         {
             MarkerRequested?.Invoke(this, EventArgs.Empty);
+            e.Handled = true;
+        }
+        else if (e.Control && e.Shift && e.KeyCode == Keys.S)
+        {
+            ScreenshotRequested?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
         }
     }

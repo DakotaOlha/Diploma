@@ -1,4 +1,5 @@
 ﻿using System.Buffers;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Channels;
@@ -16,6 +17,8 @@ using Vortice.Direct3D11;
 using Vortice.DXGI;
 using MapFlags = Vortice.Direct3D11.MapFlags;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using WinRT;
 
 namespace Diploma.Core.Services;
@@ -36,6 +39,8 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     private bool _disposed;
     
     private volatile byte[]? _latestFrame;
+    private int _latestFrameWidth;
+    private int _latestFrameHeight;
     
     private ID3D11Device? _d3dDevice;
     private ID3D11DeviceContext? _d3dContext;
@@ -117,6 +122,44 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
         ResetD3DState();
  
         Log("Recording stopped");
+    }
+    
+    public async Task<string?> TakeScreenshotAsync(string outputDir)
+    {
+        var frame  = _latestFrame;
+        var width  = _latestFrameWidth;
+        var height = _latestFrameHeight;
+
+        if (frame is null || width == 0 || height == 0)
+            return null;
+
+        var copy = new byte[width * height * 4];
+        Array.Copy(frame, copy, copy.Length);
+
+        var fileName  = $"screenshot_{DateTime.Now:yyyyMMdd_HHmmss_fff}.png";
+        var outputPath = Path.Combine(outputDir, fileName);
+
+        await Task.Run(() => SaveBgraToPng(copy, width, height, outputPath));
+
+        return outputPath;
+    }
+
+    private static void SaveBgraToPng(byte[] bgraData, int width, int height, string path)
+    {
+        var bitmapSource = BitmapSource.Create(
+            width,
+            height,
+            96.0, 96.0,
+            PixelFormats.Bgra32,
+            null,
+            bgraData,
+            width * 4);
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmapSource));
+
+        using var stream = File.Create(path);
+        encoder.Save(stream);
     }
     
     private void ResetD3DState()
@@ -414,6 +457,11 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                                 .CopyTo(new Span<byte>(data, y * width * 4, width * 4));
                         }
                     }
+                    
+                    _latestFrame       = data; 
+                    _latestFrameWidth  = width;
+                    _latestFrameHeight = height;
+                    
                     return data;
                 }
                 finally
