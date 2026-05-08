@@ -301,6 +301,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             long frameIndex      = 0;
             double frameDuration = 1000.0 / TargetFrameRate;
             BgraVideoFrame? lastFrame = null;
+            BgraVideoFrame? prevYielded  = null;
 
             while (!ct.IsCancellationRequested && !reader.TryRead(out lastFrame))
                 Thread.SpinWait(100);
@@ -314,6 +315,9 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             {
                 while (!ct.IsCancellationRequested)
                 {
+                    prevYielded?.Return();
+                    prevYielded = null;
+                    
                     while (reader.TryRead(out var newFrame))
                     {
                         if (!ReferenceEquals(lastFrame, newFrame))
@@ -326,8 +330,8 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                         break;
 
                     var frameToYield = lastFrame;
+                    prevYielded = frameToYield;
                     yield return frameToYield;
-                    frameToYield.Return();
                     frameIndex++;
 
                     double targetMs = frameIndex * frameDuration;
@@ -340,6 +344,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             finally
             {
                 timeEndPeriod(1);
+                prevYielded?.Return();
             }
         }
  
