@@ -296,33 +296,32 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     {
         IEnumerable<IVideoFrame> FrameSource(CancellationToken ct)
         {
-            var reader           = _frameChannel!.Reader;
-            var sw               = System.Diagnostics.Stopwatch.StartNew();
-            long frameIndex      = 0;
-            double frameDuration = 1000.0 / TargetFrameRate;
-            BgraVideoFrame? lastFrame = null;
-            BgraVideoFrame? prevYielded  = null;
-
+            var reader          = _frameChannel!.Reader;
+            BgraVideoFrame? lastFrame   = null;
+            BgraVideoFrame? prevYielded = null;
+            
+            var frameSw      = System.Diagnostics.Stopwatch.StartNew();
+            long frameBudget = (long)(1000.0 / TargetFrameRate); 
+            
             while (!ct.IsCancellationRequested && !reader.TryRead(out lastFrame))
                 Thread.SpinWait(100);
- 
+
             if (ct.IsCancellationRequested || lastFrame is null)
                 yield break;
- 
+
             timeBeginPeriod(1);
-            
+
             try
             {
                 while (!ct.IsCancellationRequested)
                 {
                     prevYielded?.Return();
                     prevYielded = null;
-                    
+
                     while (reader.TryRead(out var newFrame))
                     {
                         if (!ReferenceEquals(lastFrame, newFrame))
                             lastFrame.Return();
- 
                         lastFrame = newFrame;
                     }
 
@@ -332,13 +331,21 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                     var frameToYield = lastFrame;
                     prevYielded = frameToYield;
                     yield return frameToYield;
-                    frameIndex++;
 
-                    double targetMs = frameIndex * frameDuration;
-                    double sleepMs  = targetMs - sw.Elapsed.TotalMilliseconds;
+                    long remaining = frameBudget - frameSw.ElapsedMilliseconds;
+                    if (remaining > 0)
+                    {
+                        const int SliceMs = 4;
+                        while (remaining > 0 && !ct.IsCancellationRequested)
+                        {
+                            if (reader.TryPeek(out _)) break;
+                            int slice = (int)Math.Min(remaining, SliceMs);
+                            Thread.Sleep(slice);
+                            remaining -= slice;
+                        }
+                    }
 
-                    if (sleepMs > 0)
-                        Thread.Sleep((int)sleepMs);
+                    frameSw.Restart();
                 }
             }
             finally
