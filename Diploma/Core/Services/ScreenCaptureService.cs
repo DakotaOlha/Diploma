@@ -28,7 +28,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     private const int TargetFrameRate = 30;
     private const int ChannelCapacity = 8;
     private const int FirstFrameTimeoutMs   = 5_000;
-    private const int FFmpegShutdownTimeoutMs = 30_000;
+    private const long SnapshotIntervalMs = 200;
     
     private CancellationTokenSource? _cts;
     private Task? _captureTask;
@@ -38,9 +38,11 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     private volatile bool _isRecording;
     private bool _disposed;
     
-    private volatile byte[]? _latestFrame;
+    private readonly object _snapshotLock = new();
+    private byte[]? _latestFrame;
     private int _latestFrameWidth;
     private int _latestFrameHeight;
+    private long _lastSnapshotTickMs;
     
     private ID3D11Device? _d3dDevice;
     private ID3D11DeviceContext? _d3dContext;
@@ -126,43 +128,49 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
     
     public async Task<string?> TakeScreenshotAsync(string outputDir)
     {
-        var frame  = _latestFrame;
-        var width  = _latestFrameWidth;
-        var height = _latestFrameHeight;
+        byte[]? snapshot;
+        int width, height;
 
-        if (frame is null || width == 0 || height == 0)
+        lock (_snapshotLock)
+        {
+            snapshot = _latestFrame;
+            width    = _latestFrameWidth;
+            height   = _latestFrameHeight;
+        }
+
+        if (snapshot is null || width == 0 || height == 0)
             return null;
 
-        var copy = new byte[width * height * 4];
-        Array.Copy(frame, copy, copy.Length);
-
-        var fileName  = $"screenshot_{DateTime.Now:yyyyMMdd_HHmmss_fff}.png";
+        var fileName   = $"screenshot_{DateTime.Now:yyyyMMdd_HHmmss_fff}.png";
         var outputPath = Path.Combine(outputDir, fileName);
 
-        await Task.Run(() => SaveBgraToPng(copy, width, height, outputPath));
+        await Task.Run(() => SaveBgraToPng(snapshot, width, height, outputPath));
 
         return outputPath;
     }
     
     public BitmapSource? GetLatestFrameAsBitmap()
     {
-        var frame  = _latestFrame;
-        var width  = _latestFrameWidth;
-        var height = _latestFrameHeight;
-        if (frame is null || width == 0 || height == 0) return null;
+        byte[]? snapshot;
+        int width, height;
 
-        var copy = new byte[width * height * 4];
-        Array.Copy(frame, copy, copy.Length);
+        lock (_snapshotLock)
+        {
+            snapshot = _latestFrame;
+            width    = _latestFrameWidth;
+            height   = _latestFrameHeight;
+        }
+
+        if (snapshot is null || width == 0 || height == 0) return null;
 
         return BitmapSource.Create(width, height, 96, 96,
-            PixelFormats.Bgra32, null, copy, width * 4);
+            PixelFormats.Bgra32, null, snapshot, width * 4);
     }
 
     private static void SaveBgraToPng(byte[] bgraData, int width, int height, string path)
     {
         var bitmapSource = BitmapSource.Create(
-            width,
-            height,
+            width, height,
             96.0, 96.0,
             PixelFormats.Bgra32,
             null,
@@ -227,7 +235,6 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                     if (bytes is null) return;
  
                     var videoFrame = new BgraVideoFrame(bytes, width, height, pooled: true);
-                    
                     writer.TryWrite(videoFrame);
                 };
  
@@ -361,7 +368,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                     }
                     else if (videoEncoder == "h264_nvenc")
                     {
-                        opts.WithConstantRateFactor(23)   // -cq для nvenc
+                        opts.WithConstantRateFactor(23)
                             .WithCustomArgument("-preset p1")
                             .WithCustomArgument("-rc vbr")
                             .WithCustomArgument("-b:v 0");
@@ -429,7 +436,7 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
             if (texturePtr == IntPtr.Zero) return null;
  
             using var texture = new ID3D11Texture2D(texturePtr);
-            var desc= texture.Description;
+            var desc = texture.Description;
  
             lock (_stagingLock)
             {
@@ -471,11 +478,23 @@ public class ScreenCaptureService: IScreenCaptureService, IDisposable
                                 .CopyTo(new Span<byte>(data, y * width * 4, width * 4));
                         }
                     }
-                    
-                    _latestFrame       = data; 
-                    _latestFrameWidth  = width;
-                    _latestFrameHeight = height;
-                    
+
+                    var nowMs = Environment.TickCount64;
+                    if (nowMs - _lastSnapshotTickMs >= SnapshotIntervalMs)
+                    {
+                        var snapshot = new byte[width * height * 4];
+                        Buffer.BlockCopy(data, 0, snapshot, 0, snapshot.Length);
+
+                        lock (_snapshotLock)
+                        {
+                            _latestFrame       = snapshot;
+                            _latestFrameWidth  = width;
+                            _latestFrameHeight = height;
+                        }
+
+                        _lastSnapshotTickMs = nowMs;
+                    }
+
                     return data;
                 }
                 finally

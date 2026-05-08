@@ -3,7 +3,6 @@ using System.Windows;
 using Diploma.Core.Interfaces;
 using Diploma.Core.Services;
 using Diploma.Data.Database;
-using Diploma.Helpers;
 using Diploma.ViewModels;
 using Diploma.Views;
 using Hardcodet.Wpf.TaskbarNotification;
@@ -56,7 +55,7 @@ public partial class App : Application
 
         await _host.StartAsync();
 
-        _trayIcon = (TaskbarIcon)FindResource("TrayIcon");
+        _trayIcon = BuildTrayIcon();
 
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
@@ -88,23 +87,51 @@ public partial class App : Application
         base.OnStartup(e);
     }
 
-    private void TrayIcon_DoubleClick(object sender, RoutedEventArgs e) => ShowMainWindow();
-
-    private void TrayOpen_Click(object sender, RoutedEventArgs e) => ShowMainWindow();
-
-    private void TrayStartStop_Click(object sender, RoutedEventArgs e)
+    private TaskbarIcon BuildTrayIcon()
     {
-        var vm = _host.Services.GetRequiredService<MainViewModel>();
-        if (vm.IsRecording)
-            _ = vm.StopRecordingCommand.ExecuteAsync(null);
-        else
-            _ = vm.StartRecordingCommand.ExecuteAsync(null);
-    }
+        var openItem = new System.Windows.Controls.MenuItem
+        {
+            Header     = "Відкрити",
+            FontWeight = FontWeights.SemiBold,
+        };
+        openItem.Click += (_, _) => ShowMainWindow();
 
-    private void TrayExit_Click(object sender, RoutedEventArgs e)
-    {
-        _trayIcon?.Dispose();
-        Shutdown();
+        var startStopItem = new System.Windows.Controls.MenuItem
+        {
+            Header = "Старт / Стоп запису",
+        };
+        startStopItem.Click += (_, _) =>
+        {
+            var vm = _host.Services.GetRequiredService<MainViewModel>();
+            if (vm.IsRecording)
+                _ = vm.StopRecordingCommand.ExecuteAsync(null);
+            else
+                _ = vm.StartRecordingCommand.ExecuteAsync(null);
+        };
+
+        var exitItem = new System.Windows.Controls.MenuItem { Header = "Вийти" };
+        exitItem.Click += (_, _) =>
+        {
+            _trayIcon?.Dispose();
+            Shutdown();
+        };
+
+        var menu = new System.Windows.Controls.ContextMenu();
+        menu.Items.Add(openItem);
+        menu.Items.Add(startStopItem);
+        menu.Items.Add(new System.Windows.Controls.Separator());
+        menu.Items.Add(exitItem);
+
+        var icon = new TaskbarIcon
+        {
+            IconSource  = new System.Windows.Media.Imaging.BitmapImage(
+                              new Uri("pack://application:,,,/Assets/tray.ico")),
+            ToolTipText = "AlgoReplay",
+            ContextMenu = menu,
+        };
+        icon.TrayMouseDoubleClick += (_, _) => ShowMainWindow();
+
+        return icon;
     }
 
     private void ShowMainWindow()
