@@ -3,73 +3,102 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:hc="https://handyorg.github.io/handycontrol"
         xmlns:views="clr-namespace:Diploma.Views"
-        Title="AlgoReplay" Height="600" Width="600"
+        Title="AlgoReplay" Height="620" Width="600"
         WindowStyle="SingleBorderWindow"
         ResizeMode="CanResize">
+
     <TabControl>
+
         <TabItem Header="● Запис">
-    <Grid Margin="20">
-        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+            <Grid Margin="20">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
 
-            <TextBlock Text="AlgoReplay" FontSize="22" FontWeight="Bold"
-                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                    <TextBlock Text="AlgoReplay"
+                               FontSize="22" FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               Margin="0,0,0,8"/>
 
-            <TextBlock Text="{Binding StatusText}"
-                       HorizontalAlignment="Center" Opacity="0.7" Margin="0,0,0,8"/>
-
-            <TextBlock Text="{Binding RecordingDuration, StringFormat={}{0:hh\\:mm\\:ss}}"
-                       HorizontalAlignment="Center" FontSize="18" Margin="0,0,0,12"/>
-            
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
-                <CheckBox Content="🎙 Мікрофон"
-                          IsChecked="{Binding IsMicEnabled}"
-                          VerticalAlignment="Center"
-                          Margin="0,0,8,0"/>
-                <ComboBox ItemsSource="{Binding MicDevices}"
-                          SelectedItem="{Binding SelectedMicDevice}"
-                          Width="200"
-                          IsEnabled="{Binding IsMicEnabled}"/>
-            </StackPanel>
-            
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,4">
-                <TextBlock Text="Режим:" VerticalAlignment="Center"
-                           Margin="0,0,8,0" Opacity="0.7"/>
-                <ComboBox ItemsSource="{Binding AvailableModes}"
-                          SelectedItem="{Binding SelectedMode}"
-                          DisplayMemberPath="DisplayName"
-                          Width="200"
-                          IsEnabled="{Binding CanSelectMode}"/>
+                    <TextBlock Text="{Binding StatusText}"
+                               HorizontalAlignment="Center"
+                               Opacity="0.7"
+                               Margin="0,0,0,4"
+                               TextWrapping="Wrap"
+                               MaxWidth="480"/>
                     
-                
-            </StackPanel>
+                    <Border Background="#33FF5555"
+                            CornerRadius="4"
+                            Padding="8,3"
+                            Margin="0,0,0,4"
+                            Visibility="{Binding HasDropWarning,
+                                         Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding DropWarning}"
+                                   Foreground="#FF6666"
+                                   FontSize="11"
+                                   FontFamily="Consolas"
+                                   HorizontalAlignment="Center"/>
+                    </Border>
 
-            <TextBlock Text="{Binding SelectedMode.Description}"
-                       HorizontalAlignment="Center"
-                       Opacity="0.5" FontSize="11"
-                       Margin="0,0,0,8"/>
+                    <TextBlock Text="{Binding RecordingDuration, StringFormat={}{0:hh\\:mm\\:ss}}"
+                               HorizontalAlignment="Center"
+                               FontSize="18"
+                               Margin="0,0,0,12"/>
 
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <Button Content="▶ Start"
-                        Command="{Binding StartRecordingCommand}"
-                        Width="100" Margin="0,0,8,0"/>
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                Margin="0,0,0,8">
+                        <CheckBox Content="🎙 Мікрофон"
+                                  IsChecked="{Binding IsMicEnabled}"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,8,0"/>
+                        <ComboBox ItemsSource="{Binding MicDevices}"
+                                  SelectedItem="{Binding SelectedMicDevice}"
+                                  Width="200"
+                                  IsEnabled="{Binding IsMicEnabled}"/>
+                    </StackPanel>
 
-                <Button Content="⏹ Stop"
-                        Command="{Binding StopRecordingCommand}"
-                        Width="100"/>
-                
-                <Button Content="📌 Маркер"
-                        Command="{Binding AddMarkerCommand}"
-                        Width="100"
-                        IsEnabled="{Binding CanAddMarker}"
-                        ToolTip="Додати маркер (Ctrl+Shift+M)"/>
-            </StackPanel>
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                Margin="0,0,0,4">
+                        <TextBlock Text="Режим:"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0"
+                                   Opacity="0.7"/>
+                        <ComboBox ItemsSource="{Binding AvailableModes}"
+                                  SelectedItem="{Binding SelectedMode}"
+                                  DisplayMemberPath="DisplayName"
+                                  Width="200"
+                                  IsEnabled="{Binding CanSelectMode}"/>
+                    </StackPanel>
 
-        </StackPanel>
-    </Grid>
+                    <TextBlock Text="{Binding SelectedMode.Description}"
+                               HorizontalAlignment="Center"
+                               Opacity="0.5"
+                               FontSize="11"
+                               Margin="0,0,0,8"/>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button Content="▶ Start"
+                                Command="{Binding StartRecordingCommand}"
+                                Width="100"
+                                Margin="0,0,8,0"/>
+
+                        <Button Content="⏹ Stop"
+                                Command="{Binding StopRecordingCommand}"
+                                Width="100"/>
+
+                        <Button Content="📌 Маркер"
+                                Command="{Binding AddMarkerCommand}"
+                                Width="100"
+                                IsEnabled="{Binding CanAddMarker}"
+                                ToolTip="Додати маркер (Ctrl+Shift+M)"/>
+                    </StackPanel>
+
+                </StackPanel>
+            </Grid>
         </TabItem>
-        <TabItem Header="📋 Сесії" x:Name="SessionsTab">
-        </TabItem>
-        <TabItem Header="▶ Плеєр" x:Name="PlayerTab">
-        </TabItem>
+
+        <TabItem Header="📋 Сесії" x:Name="SessionsTab"/>
+
+        <TabItem Header="▶ Плеєр" x:Name="PlayerTab"/>
     </TabControl>
 </Window>
