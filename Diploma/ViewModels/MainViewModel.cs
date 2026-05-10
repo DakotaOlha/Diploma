@@ -222,20 +222,32 @@ public partial class MainViewModel : ObservableObject
 
         await TryMergeOutputAsync();
     }
-
+    
     private async Task TryMergeOutputAsync()
     {
         var videoPath = _currentVideoPath;
         var audioPath = _currentAudioPath;
 
-        if (!MediaMergeService.CanMerge(videoPath, audioPath))
+        if (!MediaMergeService.IsMp4Valid(videoPath))
         {
-            StatusText = "Merge skipped: one of the source files is missing or empty.";
+            if (!System.IO.File.Exists(videoPath))
+                StatusText = "Merge skipped: video file not found.";
+            else
+                StatusText = "⚠ Video file is corrupt (no moov atom). " +
+                             "FFmpeg may have been killed before finalizing. " +
+                             "Check logs for details.";
             return;
         }
 
-        var dir    = Path.GetDirectoryName(videoPath)!;
-        var merged = Path.Combine(dir, "merged.mp4");
+        if (!System.IO.File.Exists(audioPath) ||
+            new System.IO.FileInfo(audioPath).Length == 0)
+        {
+            StatusText = $"Saved (no audio): {System.IO.Path.GetFileName(videoPath)}";
+            return;
+        }
+
+        var dir    = System.IO.Path.GetDirectoryName(videoPath)!;
+        var merged = System.IO.Path.Combine(dir, "merged.mp4");
 
         StatusText = "Merging audio + video…";
         var ok = await _mediaMergeService.MergeAsync(videoPath, audioPath, merged);
@@ -243,7 +255,7 @@ public partial class MainViewModel : ObservableObject
         if (ok)
         {
             await _logService.UpdateSessionVideoPathAsync(_currentSessionId, merged);
-            StatusText = $"Saved: {Path.GetFileName(merged)}";
+            StatusText = $"Saved: {System.IO.Path.GetFileName(merged)}";
         }
         else
         {
