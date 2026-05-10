@@ -40,7 +40,7 @@ public class MediaMergeService
             }
 
             var success = await mergeTask;
-            
+
             if (success)
                 Log.Information("MediaMerge: done → {Output}", outputPath);
             else
@@ -61,6 +61,73 @@ public class MediaMergeService
     }
 
     public static bool CanMerge(string videoPath, string audioPath)
-        => File.Exists(videoPath) && new FileInfo(videoPath).Length > 0
-        && File.Exists(audioPath) && new FileInfo(audioPath).Length > 0;
+    {
+        if (!File.Exists(audioPath) || new FileInfo(audioPath).Length == 0)
+            return false;
+
+        return IsMp4Valid(videoPath);
+    }
+
+    public static bool IsMp4Valid(string path)
+    {
+        if (!File.Exists(path)) return false;
+
+        var fi = new FileInfo(path);
+        if (fi.Length < 8) return false;
+
+        try
+        {
+            using var fs = new FileStream(
+                path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+
+            Span<byte> header = stackalloc byte[8];
+
+            while (fs.Position + 8 <= fs.Length)
+            {
+                if (fs.Read(header) < 8) break;
+
+                uint size = ((uint)header[0] << 24)
+                           | ((uint)header[1] << 16)
+                           | ((uint)header[2] << 8)
+                           |  (uint)header[3];
+
+                string boxType = System.Text.Encoding.ASCII.GetString(header[4..8]);
+
+                if (boxType == "moov")
+                {
+                    Log.Debug("MediaMerge: moov atom found at offset {Offset}", fs.Position - 8);
+                    return true;
+                }
+
+                if (size == 1)
+                {
+                    Span<byte> ext = stackalloc byte[8];
+                    if (fs.Read(ext) < 8) break;
+                    ulong extSize = 0;
+                    for (int i = 0; i < 8; i++) extSize = (extSize << 8) | ext[i];
+                    long skip = (long)extSize - 16;
+                    if (skip < 0) break;
+                    fs.Seek(skip, SeekOrigin.Current);
+                }
+                else if (size == 0)
+                {
+                    break;
+                }
+                else
+                {
+                    long skip = (long)size - 8;
+                    if (skip < 0) break;
+                    fs.Seek(skip, SeekOrigin.Current);
+                }
+            }
+
+            Log.Warning("MediaMerge: no moov atom found in {Path} — file is corrupt", path);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "MediaMerge: IsMp4Valid scan failed for {Path}", path);
+            return false;
+        }
+    }
 }

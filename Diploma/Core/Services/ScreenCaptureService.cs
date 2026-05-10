@@ -26,18 +26,17 @@ namespace Diploma.Core.Services;
 public class ScreenCaptureService : IScreenCaptureService, IDisposable
 {
     private const int HighFrameRate = 30;
+    private const int LowFrameRate  = 15;
 
-    private const int LowFrameRate = 15;
+    private const double DropRateHighThreshold = 0.10;
+    private const double DropRateLowThreshold  = 0.02;
+    private const int    AdaptiveWindowSeconds  = 3;
 
-    private const double DropRateHighThreshold = 0.10;  
-
-    private const double DropRateLowThreshold  = 0.02; 
-
-    private const int AdaptiveWindowSeconds = 3;
-
-    private const int ChannelCapacity      = 8;
-    private const int FirstFrameTimeoutMs  = 5_000;
+    private const int  ChannelCapacity     = 8;
+    private const int  FirstFrameTimeoutMs = 5_000;
     private const long SnapshotIntervalMs  = 200;
+
+    private TaskCompletionSource<bool>? _stopRequested;
 
     private CancellationTokenSource? _cts;
     private Task? _captureTask;
@@ -47,7 +46,7 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     private volatile bool _isRecording;
     private bool _disposed;
 
-    private readonly object _snapshotLock = new();
+    private readonly object _snapshotLock   = new();
     private byte[]? _latestFrame;
     private int     _latestFrameWidth;
     private int     _latestFrameHeight;
@@ -59,8 +58,8 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     private (int W, int H)       _stagingSize;
     private readonly object      _stagingLock = new();
 
-    private long _droppedFramesTotal;   
-    private long _droppedFramesWindow;   
+    private long _droppedFramesTotal;
+    private long _droppedFramesWindow;
     private long _deliveredFramesWindow;
 
     private volatile int _targetFrameRate = HighFrameRate;
@@ -71,9 +70,8 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     public bool IsRecording => _isRecording;
 
     public event EventHandler<string>? StatusChanged;
-    public event EventHandler? RecordingStarted;
-    public event EventHandler? CaptureTargetSelected;
-
+    public event EventHandler?         RecordingStarted;
+    public event EventHandler?         CaptureTargetSelected;
     public event EventHandler<DropStatsEventArgs>? DropStatsChanged;
 
     [DllImport("winmm.dll")]
@@ -100,10 +98,13 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
 
         if (item == null) return false;
 
-        _targetFrameRate        = HighFrameRate;
-        _droppedFramesTotal     = 0;
-        _droppedFramesWindow    = 0;
-        _deliveredFramesWindow  = 0;
+        _targetFrameRate       = HighFrameRate;
+        _droppedFramesTotal    = 0;
+        _droppedFramesWindow   = 0;
+        _deliveredFramesWindow = 0;
+
+        _stopRequested = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
 
         _frameChannel = Channel.CreateBounded<BgraVideoFrame>(
             new BoundedChannelOptions(ChannelCapacity)
@@ -126,18 +127,25 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     {
         if (!_isRecording) return;
 
-        _cts?.Cancel();
         _isRecording = false;
+
+        _stopRequested?.TrySetResult(true);
+
+        if (_encodeTask != null)
+        {
+            var finalized = await Task.WhenAny(_encodeTask, Task.Delay(30_000));
+            if (finalized != _encodeTask)
+            {
+                Log("StopAsync: encode did not finish in 30 s — forcing cancel");
+                _cts?.Cancel();
+            }
+        }
+
+        _cts?.Cancel();
 
         if (_captureTask != null)
         {
             try   { await _captureTask.ConfigureAwait(false); }
-            catch (OperationCanceledException) { }
-        }
-
-        if (_encodeTask != null)
-        {
-            try   { await _encodeTask.ConfigureAwait(false); }
             catch (OperationCanceledException) { }
         }
 
@@ -202,9 +210,6 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
             Direct3D11CaptureFramePool? framePool = null;
             GraphicsCaptureSession?     session   = null;
 
-            long framesOffered = 0;
-            long framesWritten = 0;
-
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
@@ -218,6 +223,8 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
 
                 framePool.FrameArrived += (pool, _) =>
                 {
+                    if (_stopRequested?.Task.IsCompleted == true) return;
+
                     using var frame = pool.TryGetNextFrame();
                     if (frame is null) return;
 
@@ -226,7 +233,6 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
 
                     var videoFrame = new BgraVideoFrame(bytes, width, height, pooled: true);
 
-                    framesOffered++;
                     bool accepted = writer.TryWrite(videoFrame);
 
                     if (!accepted)
@@ -234,10 +240,6 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                         Interlocked.Increment(ref _droppedFramesTotal);
                         Interlocked.Increment(ref _droppedFramesWindow);
                         videoFrame.Return();
-                    }
-                    else
-                    {
-                        framesWritten++;
                     }
                 };
 
@@ -274,9 +276,14 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
             Log("First frame received — starting encode…");
             RecordingStarted?.Invoke(this, EventArgs.Empty);
 
-            _encodeTask = Task.Run(() => EncodeLoopAsync(outputPath, width, height, token));
+            _encodeTask = Task.Run(() => EncodeLoopAsync(outputPath, width, height));
 
-            try { await Task.Delay(Timeout.Infinite, token); }
+            try
+            {
+                await Task.WhenAny(
+                    _stopRequested!.Task,
+                    Task.Delay(Timeout.Infinite, token));
+            }
             catch (OperationCanceledException) { }
 
             await Application.Current.Dispatcher.InvokeAsync(() =>
@@ -295,37 +302,35 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
         }
     }
 
-    private async Task EncodeLoopAsync(
-        string outputPath,
-        int width,
-        int height,
-        CancellationToken token)
+    private async Task EncodeLoopAsync(string outputPath, int width, int height)
     {
-        var  windowStart       = Environment.TickCount64;
-        int  currentFrameRate  = _targetFrameRate;
+        var windowStart      = Environment.TickCount64;
+        int currentFrameRate = _targetFrameRate;
 
-        IEnumerable<IVideoFrame> FrameSource(CancellationToken ct)
+        IEnumerable<IVideoFrame> FrameSource()
         {
             var reader = _frameChannel!.Reader;
 
             BgraVideoFrame? lastFrame   = null;
             BgraVideoFrame? prevYielded = null;
 
-            while (!ct.IsCancellationRequested && !reader.TryRead(out lastFrame))
+            while (!reader.TryRead(out lastFrame))
+            {
+                if (reader.Completion.IsCompleted) yield break;
                 Thread.SpinWait(100);
+            }
 
-            if (ct.IsCancellationRequested || lastFrame is null)
-                yield break;
+            if (lastFrame is null) yield break;
 
             timeBeginPeriod(1);
 
             try
             {
-                while (!ct.IsCancellationRequested)
+                while (!reader.Completion.IsCompleted || reader.TryRead(out _))
                 {
                     prevYielded?.Return();
                     prevYielded = null;
-                    
+
                     while (reader.TryRead(out var newFrame))
                     {
                         if (!ReferenceEquals(lastFrame, newFrame))
@@ -378,8 +383,9 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                     long remaining     = frameBudgetMs;
 
                     const int SliceMs = 4;
-                    while (remaining > 0 && !ct.IsCancellationRequested)
+                    while (remaining > 0)
                     {
+                        if (reader.Completion.IsCompleted) break;
                         if (reader.TryPeek(out _)) break;
                         int slice = (int)Math.Min(remaining, SliceMs);
                         Thread.Sleep(slice);
@@ -394,9 +400,9 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
             }
         }
 
-        var videoSource = new RawVideoPipeSource(FrameSource(token))
+        var videoSource = new RawVideoPipeSource(FrameSource())
         {
-            FrameRate = HighFrameRate 
+            FrameRate = HighFrameRate
         };
 
         try
@@ -437,21 +443,16 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                             break;
                     }
                 })
-                .CancellableThrough(token)
                 .ProcessAsynchronously();
 
             var success = await encodeTask;
 
             if (success) Log("Encode finished — MP4 fully written.");
-            else         Log("Encode finished with errors or was force cancelled.");
+            else         Log("Encode finished with errors.");
 
             var totalDropped = Interlocked.Read(ref _droppedFramesTotal);
             if (totalDropped > 0)
                 Log($"Total frames dropped during session: {totalDropped}");
-        }
-        catch (OperationCanceledException)
-        {
-            Log("Encode cancelled — normal shutdown.");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -597,10 +598,8 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     private static void SaveBgraToPng(byte[] bgraData, int width, int height, string path)
     {
         var bitmapSource = BitmapSource.Create(
-            width, height,
-            96.0, 96.0,
-            PixelFormats.Bgra32, null,
-            bgraData, width * 4);
+            width, height, 96.0, 96.0,
+            PixelFormats.Bgra32, null, bgraData, width * 4);
 
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmapSource));
@@ -614,9 +613,11 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
         if (_disposed) return;
         _disposed = true;
 
+        _stopRequested?.TrySetResult(true);
         _cts?.Cancel();
+
         _captureTask?.Wait(TimeSpan.FromSeconds(2));
-        _encodeTask?.Wait(TimeSpan.FromSeconds(5));
+        _encodeTask?.Wait(TimeSpan.FromSeconds(30));
         _cts?.Dispose();
 
         ResetD3DState();
@@ -633,9 +634,9 @@ interface IDirect3DDxgiInterfaceAccess
 
 public sealed class DropStatsEventArgs : EventArgs
 {
-    public long   TotalDropped  { get; }
-    public double DropRate      { get; } 
-    public int    CurrentFps    { get; }
+    public long   TotalDropped { get; }
+    public double DropRate     { get; }
+    public int    CurrentFps   { get; }
 
     public DropStatsEventArgs(long totalDropped, double dropRate, int currentFps)
     {
