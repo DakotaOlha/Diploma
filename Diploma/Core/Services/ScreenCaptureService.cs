@@ -35,6 +35,7 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     private const int  ChannelCapacity     = 8;
     private const int  FirstFrameTimeoutMs = 5_000;
     private const long SnapshotIntervalMs  = 200;
+    private const int LogRingCapacity = 50;
 
     private TaskCompletionSource<bool>? _stopRequested;
 
@@ -64,8 +65,10 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
 
     private volatile int _targetFrameRate = HighFrameRate;
 
-    private readonly object        _logLock   = new();
-    private readonly StringBuilder _logBuffer = new();
+    private readonly object   _logLock  = new();
+    private readonly string[] _logRing  = new string[LogRingCapacity];
+    private int               _logHead  = 0;
+    private int               _logCount = 0;
 
     public bool IsRecording => _isRecording;
 
@@ -582,11 +585,30 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
 
     private void Log(string message)
     {
+        string line = $"{DateTime.Now:HH:mm:ss.fff} | {message}";
+ 
+        string snapshot;
         lock (_logLock)
         {
-            _logBuffer.AppendLine($"{DateTime.Now:HH:mm:ss.fff} | {message}");
-            StatusChanged?.Invoke(this, _logBuffer.ToString());
+            _logRing[_logHead] = line;
+            _logHead  = (_logHead + 1) % LogRingCapacity;
+            _logCount = Math.Min(_logCount + 1, LogRingCapacity);
+ 
+            int count = _logCount;
+            int start = count < LogRingCapacity
+                ? 0
+                : _logHead;
+ 
+            var sb = new StringBuilder(count * 80);
+            for (int i = 0; i < count; i++)
+            {
+                int idx = (start + i) % LogRingCapacity;
+                sb.AppendLine(_logRing[idx]);
+            }
+            snapshot = sb.ToString();
         }
+ 
+        StatusChanged?.Invoke(this, snapshot);
     }
 
     private void RaiseDropStats(long totalDropped, double dropRate, int fps)
