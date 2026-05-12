@@ -55,7 +55,7 @@
 
 ## 📥 Інструкція із запуску
 
-1. Перейдіть у розділ [Releases](https://github.com/DakotaOlha/Diploma).
+1. Перейдіть у розділ [Releases](https://github.com/DakotaOlha/Diploma/releases).
 2. Завантажте архів `AlgoReplay_v1.0.0.zip`.
 3. Розпакуйте архів у зручне місце.
 4. Запустіть файл `Diploma.exe`.
