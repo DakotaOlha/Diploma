@@ -5,100 +5,500 @@
         xmlns:views="clr-namespace:Diploma.Views"
         Title="AlgoReplay" Height="620" Width="600"
         WindowStyle="SingleBorderWindow"
-        ResizeMode="CanResize">
+        ResizeMode="CanResize"
+        Background="#102020">
 
-    <TabControl>
+    <Window.Resources>
+        <!-- Кольори палітри -->
+        <SolidColorBrush x:Key="BgDarkBrush" Color="#102020"/>
+        <SolidColorBrush x:Key="BgMidBrush" Color="#2D4C4F"/>
+        <SolidColorBrush x:Key="AccentRedBrush" Color="#83241E"/>
+        <SolidColorBrush x:Key="AccentTealBrush" Color="#78B4B7"/>
+        <SolidColorBrush x:Key="AccentGoldBrush" Color="#BD8B33"/>
+        <SolidColorBrush x:Key="TextLightBrush" Color="#D9E9E9"/>
 
-        <TabItem Header="● Запис">
-            <Grid Margin="20">
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+        <!-- Конвертер для відображення вибраного елемента -->
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
-                    <TextBlock Text="AlgoReplay"
-                               FontSize="22" FontWeight="Bold"
-                               HorizontalAlignment="Center"
-                               Margin="0,0,0,8"/>
+        <!-- Стиль TabControl -->
+        <Style TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="#2D4C4F"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Background="#102020" 
+                                    BorderBrush="#2D4C4F" BorderThickness="0,0,0,1"
+                                    Padding="8,4,0,0">
+                                <TabPanel x:Name="HeaderPanel"
+                                          Panel.ZIndex="1"
+                                          IsItemsHost="True"
+                                          KeyboardNavigation.TabIndex="1"
+                                          Grid.Row="0"/>
+                            </Border>
+                            <Border Grid.Row="1" Background="#102020" 
+                                    BorderThickness="0">
+                                <ContentPresenter x:Name="PART_SelectedContentHost"
+                                                  ContentSource="SelectedContent"/>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-                    <TextBlock Text="{Binding StatusText}"
-                               HorizontalAlignment="Center"
-                               Opacity="0.7"
-                               Margin="0,0,0,4"
-                               TextWrapping="Wrap"
-                               MaxWidth="480"/>
-                    
-                    <Border Background="#33FF5555"
-                            CornerRadius="4"
-                            Padding="8,3"
-                            Margin="0,0,0,4"
-                            Visibility="{Binding HasDropWarning,
-                                         Converter={StaticResource BoolToVis}}">
-                        <TextBlock Text="{Binding DropWarning}"
-                                   Foreground="#FF6666"
-                                   FontSize="11"
-                                   FontFamily="Consolas"
-                                   HorizontalAlignment="Center"/>
-                    </Border>
+        <!-- Стиль TabItem -->
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="#99D9E9E9"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Margin" Value="0,0,2,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="TabBorder" 
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent"
+                                BorderThickness="0,0,0,3"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="8,8,0,0">
+                            <ContentPresenter x:Name="ContentSite"
+                                              ContentSource="Header"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              TextBlock.Foreground="{TemplateBinding Foreground}"
+                                              TextBlock.FontWeight="{TemplateBinding FontWeight}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="#1A2D4C4F"/>
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#78B4B7"/>
+                                <Setter Property="Foreground" Value="#D9E9E9"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="#1A78B4B7"/>
+                                <Setter Property="Foreground" Value="#D9E9E9"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-                    <TextBlock Text="{Binding RecordingDuration, StringFormat={}{0:hh\\:mm\\:ss}}"
-                               HorizontalAlignment="Center"
-                               FontSize="18"
-                               Margin="0,0,0,12"/>
+        <!-- Стиль Button -->
+        <Style TargetType="Button">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#D9E9E9"/>
+            <Setter Property="Background" Value="#2D4C4F"/>
+            <Setter Property="BorderBrush" Value="#78B4B7"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Border" 
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#3D6E7A"/>
+                                <Setter TargetName="Border" Property="BorderBrush" Value="#D9E9E9"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#83241E"/>
+                                <Setter TargetName="Border" Property="BorderBrush" Value="#BD8B33"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Border" Property="Opacity" Value="0.5"/>
+                                <Setter Property="Foreground" Value="#667D8A"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-                    <StackPanel Orientation="Horizontal"
-                                HorizontalAlignment="Center"
-                                Margin="0,0,0,8">
-                        <CheckBox Content="🎙 Мікрофон"
-                                  IsChecked="{Binding IsMicEnabled}"
-                                  VerticalAlignment="Center"
-                                  Margin="0,0,8,0"/>
-                        <ComboBox ItemsSource="{Binding MicDevices}"
-                                  SelectedItem="{Binding SelectedMicDevice}"
-                                  Width="200"
-                                  IsEnabled="{Binding IsMicEnabled}"/>
-                    </StackPanel>
+        <!-- Стиль ComboBox з фіксованим відображенням вибраного значення -->
+        <Style x:Key="CustomComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="#D9E9E9"/>
+            <Setter Property="Background" Value="#1A2D4C4F"/>
+            <Setter Property="BorderBrush" Value="#2D4C4F"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <Border x:Name="MainBorder" 
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <!-- Відображення вибраного тексту -->
+                                    <ContentPresenter x:Name="ContentSite"
+                                                      Content="{TemplateBinding SelectionBoxItem}"
+                                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                      ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                                      VerticalAlignment="Center"
+                                                      HorizontalAlignment="Left"
+                                                      Margin="8,4,8,4"
+                                                      RecognizesAccessKey="True"
+                                                      TextBlock.Foreground="#D9E9E9"/>
+                                    
+                                    <!-- Текст-заповнювач, коли нічого не вибрано -->
+                                    <TextBlock x:Name="Placeholder"
+                                               Text="{TemplateBinding Tag}"
+                                               VerticalAlignment="Center"
+                                               HorizontalAlignment="Left"
+                                               Margin="8,4,8,4"
+                                               Foreground="#667D8A"
+                                               Visibility="Collapsed"/>
+                                    
+                                    <!-- Стрілка справа -->
+                                    <ToggleButton Grid.Column="1"
+                                                  x:Name="ToggleButton"
+                                                  Focusable="False"
+                                                  IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                                  ClickMode="Press"
+                                                  Background="Transparent"
+                                                  BorderBrush="Transparent"
+                                                  BorderThickness="0"
+                                                  Width="30">
+                                        <ToggleButton.Template>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border Background="Transparent" 
+                                                        Width="30" 
+                                                        Height="30"
+                                                        CornerRadius="0,6,6,0">
+                                                    <Path x:Name="Arrow" 
+                                                          Data="M0,0 L4,4 L8,0" 
+                                                          Fill="#78B4B7" 
+                                                          VerticalAlignment="Center" 
+                                                          HorizontalAlignment="Center" 
+                                                          Stretch="Uniform" 
+                                                          Width="10"
+                                                          RenderTransformOrigin="0.5,0.5">
+                                                        <Path.RenderTransform>
+                                                            <RotateTransform Angle="0"/>
+                                                        </Path.RenderTransform>
+                                                    </Path>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="Arrow" Property="Fill" Value="#D9E9E9"/>
+                                                        <Setter TargetName="Arrow" Property="RenderTransform">
+                                                            <Setter.Value>
+                                                                <RotateTransform Angle="180"/>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                    </Trigger>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Arrow" Property="Fill" Value="#D9E9E9"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </ToggleButton.Template>
+                                    </ToggleButton>
+                                </Grid>
+                            </Border>
+                            
+                            <Popup x:Name="Popup" 
+                                   Placement="Bottom" 
+                                   IsOpen="{TemplateBinding IsDropDownOpen}" 
+                                   AllowsTransparency="True" 
+                                   Focusable="False" 
+                                   PopupAnimation="Slide">
+                                <Grid MaxHeight="{TemplateBinding MaxDropDownHeight}" 
+                                      MinWidth="{TemplateBinding ActualWidth}">
+                                    <Border Background="#1A2D4C4F" 
+                                            BorderBrush="#78B4B7" 
+                                            BorderThickness="1" 
+                                            CornerRadius="6" 
+                                            Margin="0,2,0,0">
+                                        <ScrollViewer>
+                                            <ItemsPresenter/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="#78B4B7"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="MainBorder" Property="BorderBrush" Value="#78B4B7"/>
+                            </Trigger>
+                            <Trigger Property="SelectedItem" Value="{x:Null}">
+                                <Setter TargetName="Placeholder" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-                    <StackPanel Orientation="Horizontal"
-                                HorizontalAlignment="Center"
-                                Margin="0,0,0,4">
-                        <TextBlock Text="Режим:"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,8,0"
-                                   Opacity="0.7"/>
-                        <ComboBox ItemsSource="{Binding AvailableModes}"
-                                  SelectedItem="{Binding SelectedMode}"
-                                  DisplayMemberPath="DisplayName"
-                                  Width="200"
-                                  IsEnabled="{Binding CanSelectMode}"/>
-                    </StackPanel>
+        <!-- Стиль для елементів ComboBox -->
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="#D9E9E9"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Border" 
+                                Background="{TemplateBinding Background}" 
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="4">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#2D4C4F"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#1A78B4B7"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-                    <TextBlock Text="{Binding SelectedMode.Description}"
-                               HorizontalAlignment="Center"
-                               Opacity="0.5"
-                               FontSize="11"
-                               Margin="0,0,0,8"/>
+        <!-- CheckBox Style -->
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#D9E9E9"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
 
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <Button Content="▶ Start"
-                                Command="{Binding StartRecordingCommand}"
-                                Width="100"
-                                Margin="0,0,8,0"/>
+        <!-- TextBlock Style for labels -->
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#D9E9E9"/>
+        </Style>
+    </Window.Resources>
 
-                        <Button Content="⏹ Stop"
-                                Command="{Binding StopRecordingCommand}"
-                                Width="100"/>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-                        <Button Content="📌 Маркер"
-                                Command="{Binding AddMarkerCommand}"
-                                Width="100"
-                                IsEnabled="{Binding CanAddMarker}"
-                                ToolTip="Додати маркер (Ctrl+Shift+M)"/>
-                    </StackPanel>
-
+        <!-- Верхня панель як в Zoom/Teams -->
+        <Border Grid.Row="0" Background="#102020" Padding="16,12" 
+                BorderBrush="#2D4C4F" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Text="AlgoReplay" 
+                           FontSize="18" FontWeight="Bold" 
+                           Foreground="#D9E9E9"
+                           VerticalAlignment="Center"
+                           Margin="0,0,16,0"/>
+                
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="—" 
+                            Width="36" Height="28" 
+                            FontSize="14"
+                            Background="Transparent" 
+                            BorderBrush="Transparent"
+                            Foreground="#78B4B7"
+                            Margin="0,0,4,0"/>
+                    <Button Content="□" 
+                            Width="36" Height="28" 
+                            FontSize="14"
+                            Background="Transparent" 
+                            BorderBrush="Transparent"
+                            Foreground="#78B4B7"
+                            Margin="0,0,4,0"/>
+                    <Button Content="✕" 
+                            Width="36" Height="28" 
+                            FontSize="14"
+                            Background="Transparent" 
+                            BorderBrush="Transparent"
+                            Foreground="#83241E"/>
                 </StackPanel>
             </Grid>
-        </TabItem>
+        </Border>
 
-        <TabItem Header="📋 Сесії" x:Name="SessionsTab"/>
+        <TabControl Grid.Row="1" Margin="0,8,0,0">
+            <TabItem Header="● Запис">
+                <Grid Margin="24,20">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" 
+                                MaxWidth="520">
+                        
+                        <!-- Заголовок -->
+                        <Border Background="#1A2D4C4F" 
+                                CornerRadius="12" 
+                                Padding="24,20"
+                                Margin="0,0,0,16"
+                                BorderBrush="#2D4C4F" 
+                                BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="AlgoReplay"
+                                           FontSize="26" FontWeight="Bold"
+                                           HorizontalAlignment="Center"
+                                           Foreground="#D9E9E9"
+                                           Margin="0,0,0,4"/>
+                                
+                                <TextBlock Text="{Binding StatusText}"
+                                           HorizontalAlignment="Center"
+                                           Foreground="#78B4B7"
+                                           FontSize="13"
+                                           Margin="0,0,0,8"
+                                           TextWrapping="Wrap"
+                                           MaxWidth="460"/>
+                                
+                                <!-- Попередження про дроп -->
+                                <Border Background="#3383241E"
+                                        CornerRadius="6"
+                                        Padding="12,8"
+                                        Margin="0,0,0,8"
+                                        Visibility="{Binding HasDropWarning,
+                                                     Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="{Binding DropWarning}"
+                                               Foreground="#BD8B33"
+                                               FontSize="12"
+                                               FontFamily="Consolas"
+                                               HorizontalAlignment="Center"
+                                               TextWrapping="Wrap"/>
+                                </Border>
 
-        <TabItem Header="▶ Плеєр" x:Name="PlayerTab"/>
-    </TabControl>
+                                <!-- Тривалість запису -->
+                                <Border Background="#102020" 
+                                        CornerRadius="8" 
+                                        Padding="20,12"
+                                        Margin="0,0,0,12">
+                                    <TextBlock Text="{Binding RecordingDuration, StringFormat={}{0:hh\\:mm\\:ss}}"
+                                               HorizontalAlignment="Center"
+                                               FontSize="28"
+                                               FontFamily="Consolas"
+                                               FontWeight="Bold"
+                                               Foreground="#78B4B7"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Налаштування мікрофона -->
+                        <Border Background="#1A2D4C4F" 
+                                CornerRadius="8" 
+                                Padding="16,12"
+                                Margin="0,0,0,8"
+                                BorderBrush="#2D4C4F" 
+                                BorderThickness="1">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Center"
+                                            Margin="0,0,0,8">
+                                    <CheckBox Content="🎙 Мікрофон"
+                                              IsChecked="{Binding IsMicEnabled}"
+                                              VerticalAlignment="Center"
+                                              Margin="0,0,12,0"/>
+                                    <ComboBox Style="{StaticResource CustomComboBoxStyle}"
+                                              ItemsSource="{Binding MicDevices}"
+                                              SelectedItem="{Binding SelectedMicDevice}"
+                                              Width="240"
+                                              IsEnabled="{Binding IsMicEnabled}"
+                                              Tag="Оберіть мікрофон"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Вибір режиму -->
+                        <Border Background="#1A2D4C4F" 
+                                CornerRadius="8" 
+                                Padding="16,12"
+                                Margin="0,0,0,8"
+                                BorderBrush="#2D4C4F" 
+                                BorderThickness="1">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Center"
+                                            Margin="0,0,0,4">
+                                    <TextBlock Text="Режим:"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,12,0"
+                                               Foreground="#78B4B7"
+                                               FontWeight="Medium"/>
+                                    <ComboBox Style="{StaticResource CustomComboBoxStyle}"
+                                              ItemsSource="{Binding AvailableModes}"
+                                              SelectedItem="{Binding SelectedMode}"
+                                              DisplayMemberPath="DisplayName"
+                                              Width="240"
+                                              IsEnabled="{Binding CanSelectMode}"
+                                              Tag="Оберіть режим"/>
+                                </StackPanel>
+
+                                <TextBlock Text="{Binding SelectedMode.Description}"
+                                           HorizontalAlignment="Center"
+                                           Foreground="#99D9E9E9"
+                                           FontSize="11"
+                                           Margin="0,4,0,0"
+                                           TextWrapping="Wrap"
+                                           MaxWidth="460"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Кнопки керування -->
+                        <StackPanel Orientation="Horizontal" 
+                                    HorizontalAlignment="Center"
+                                    Margin="0,8,0,0">
+                            <Button Content="▶ Почати"
+                                    Command="{Binding StartRecordingCommand}"
+                                    Width="110"
+                                    Margin="0,0,8,0"
+                                    Background="#83241E"
+                                    BorderBrush="#BD8B33"/>
+
+                            <Button Content="⏹ Стоп"
+                                    Command="{Binding StopRecordingCommand}"
+                                    Width="110"
+                                    Margin="0,0,8,0"/>
+
+                            <Button Content="📌 Маркер"
+                                    Command="{Binding AddMarkerCommand}"
+                                    Width="110"
+                                    IsEnabled="{Binding CanAddMarker}"
+                                    ToolTip="Додати маркер (Ctrl+Shift+M)"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="📋 Сесії" x:Name="SessionsTab"/>
+
+            <TabItem Header="▶ Плеєр" x:Name="PlayerTab"/>
+        </TabControl>
+    </Grid>
 </Window>
