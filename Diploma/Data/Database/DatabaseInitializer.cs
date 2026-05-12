@@ -30,6 +30,8 @@ public class DatabaseInitializer
         using var conn = new SqliteConnection(_connectionString);
         conn.Open();
 
+        ApplyPragmas(conn);
+
         using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = "PRAGMA foreign_keys = ON;";
@@ -52,7 +54,7 @@ public class DatabaseInitializer
 
         foreach (var migration in pending)
         {
-            Log.Information("DatabaseInitializer: applying migration → v{Version}", 
+            Log.Information("DatabaseInitializer: applying migration → v{Version}",
                 migration.TargetVersion);
 
             using var tx = conn.BeginTransaction();
@@ -62,7 +64,7 @@ public class DatabaseInitializer
                 SetUserVersion(conn, migration.TargetVersion);
                 tx.Commit();
 
-                Log.Information("DatabaseInitializer: migration v{Version} applied.", 
+                Log.Information("DatabaseInitializer: migration v{Version} applied.",
                     migration.TargetVersion);
             }
             catch (Exception ex)
@@ -73,6 +75,23 @@ public class DatabaseInitializer
                 throw;
             }
         }
+    }
+
+    public static void ApplyPragmas(SqliteConnection conn)
+    {
+        using var cmd = conn.CreateCommand();
+
+        cmd.CommandText = "PRAGMA journal_mode = WAL;";
+        cmd.ExecuteScalar();
+
+        cmd.CommandText = "PRAGMA synchronous = NORMAL;";
+        cmd.ExecuteNonQuery();
+
+        cmd.CommandText = "PRAGMA cache_size = -32000;";
+        cmd.ExecuteNonQuery();
+
+        cmd.CommandText = "PRAGMA temp_store = MEMORY;";
+        cmd.ExecuteNonQuery();
     }
 
     private static int GetUserVersion(SqliteConnection conn)

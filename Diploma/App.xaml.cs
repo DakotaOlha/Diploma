@@ -153,6 +153,9 @@ public partial class App : Application
         var player = _host.Services.GetRequiredService<PlayerViewModel>();
         player.Dispose();
 
+        if (_host.Services.GetRequiredService<ILogService>() is IAsyncDisposable logService)
+            await logService.DisposeAsync();
+
         await _host.StopAsync();
         Log.CloseAndFlush();
         base.OnExit(e);

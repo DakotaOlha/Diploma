@@ -20,6 +20,10 @@ public class FileSystemMonitor : IDisposable
     private readonly Dictionary<string, DateTime> _lastLogged = new();
     private readonly TimeSpan _debounce = TimeSpan.FromSeconds(2);
 
+    private static readonly TimeSpan CleanupInterval  = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan StaleEntryMaxAge = TimeSpan.FromMinutes(10);
+    private Timer? _cleanupTimer;
+
     private int _sessionId;
     private bool _isRunning;
     private bool _disposed;
@@ -40,6 +44,12 @@ public class FileSystemMonitor : IDisposable
             if (!Directory.Exists(path)) continue;
             AddWatcher(path);
         }
+
+        _cleanupTimer = new Timer(
+            _ => CleanupStaleEntries(),
+            state: null,
+            dueTime: CleanupInterval,
+            period: CleanupInterval);
     }
 
     public void AddPath(string path)
@@ -52,9 +62,9 @@ public class FileSystemMonitor : IDisposable
     {
         var watcher = new FileSystemWatcher(path)
         {
-            NotifyFilter           = NotifyFilters.LastWrite | NotifyFilters.FileName,
-            IncludeSubdirectories  = true,
-            EnableRaisingEvents    = true
+            NotifyFilter          = NotifyFilters.LastWrite | NotifyFilters.FileName,
+            IncludeSubdirectories = true,
+            EnableRaisingEvents   = true
         };
 
         watcher.Changed += OnFileChanged;
@@ -76,11 +86,15 @@ public class FileSystemMonitor : IDisposable
             return;
 
         var now = DateTime.UtcNow;
-        if (_lastLogged.TryGetValue(e.FullPath, out var last) &&
-            now - last < _debounce)
-            return;
 
-        _lastLogged[e.FullPath] = now;
+        lock (_lastLogged)
+        {
+            if (_lastLogged.TryGetValue(e.FullPath, out var last) &&
+                now - last < _debounce)
+                return;
+
+            _lastLogged[e.FullPath] = now;
+        }
 
         _ = _logService.LogEventAsync(
             _sessionId,
@@ -89,10 +103,30 @@ public class FileSystemMonitor : IDisposable
             metadata: e.FullPath);
     }
 
+    private void CleanupStaleEntries()
+    {
+        if (!_isRunning) return;
+
+        var cutoff = DateTime.UtcNow - StaleEntryMaxAge;
+        lock (_lastLogged)
+        {
+            var stale = _lastLogged
+                .Where(kv => kv.Value < cutoff)
+                .Select(kv => kv.Key)
+                .ToList();
+
+            foreach (var key in stale)
+                _lastLogged.Remove(key);
+        }
+    }
+
     public void Stop()
     {
         if (!_isRunning) return;
         _isRunning = false;
+
+        _cleanupTimer?.Dispose();
+        _cleanupTimer = null;
 
         foreach (var w in _watchers)
         {
@@ -100,7 +134,9 @@ public class FileSystemMonitor : IDisposable
             w.Dispose();
         }
         _watchers.Clear();
-        _lastLogged.Clear();
+
+        lock (_lastLogged)
+            _lastLogged.Clear();
     }
 
     public void Dispose()
