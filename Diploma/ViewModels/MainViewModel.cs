@@ -46,7 +46,7 @@ public partial class MainViewModel : ObservableObject
     private string _currentAudioPath = string.Empty;
     private string _currentVideoPath = string.Empty;
     
-    private System.Timers.Timer? _durationTimer;
+    private System.Windows.Threading.DispatcherTimer? _durationTimer;
 
     public MainViewModel(
         IScreenCaptureService  captureService,
@@ -106,9 +106,8 @@ public partial class MainViewModel : ObservableObject
         _captureService.RecordingStarted += async (_, _) =>
         {
             _logService.AdjustSessionStart(_currentSessionId, DateTime.UtcNow);
- 
             StartDurationTimer();
- 
+
             if (IsMicEnabled && MicDevices.Count > 0)
             {
                 try
@@ -295,18 +294,29 @@ public partial class MainViewModel : ObservableObject
     private void StartDurationTimer()
     {
         ResetDurationCounter();
-        _durationTimer = new System.Timers.Timer(1000);
-        _durationTimer.Elapsed += (_, _) =>
-            App.Current.Dispatcher.Invoke(() =>
-                RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1)));
+
+        _durationTimer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Background,
+            App.Current.Dispatcher)
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        _durationTimer.Tick += OnDurationTimerTick;
         _durationTimer.Start();
     }
     
+    private void OnDurationTimerTick(object? sender, EventArgs e)
+        => RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1));
+    
     private void ResetDurationCounter()
     {
-        _durationTimer?.Stop();
-        _durationTimer?.Dispose();
-        _durationTimer    = null;
+        if (_durationTimer is not null)
+        {
+            _durationTimer.Stop();
+            _durationTimer.Tick -= OnDurationTimerTick;
+            _durationTimer = null;
+        }
+
         RecordingDuration = TimeSpan.Zero;
     }
     

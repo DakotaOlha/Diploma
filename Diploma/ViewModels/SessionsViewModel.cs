@@ -1,4 +1,6 @@
 ﻿using System.Collections.ObjectModel;
+using System.IO;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Diploma.Core.Interfaces;
@@ -78,8 +80,12 @@ public partial class SessionsViewModel : ObservableObject
     [RelayCommand]
     private async Task ExportJsonAsync()
     {
-        if (SelectedSession is null) return;
-        var path = PickSavePath("JSON файл|*.json", $"{SelectedSession.Name}.json");
+        if (SelectedSession is null) 
+            return;
+        
+        string sanitizedName = SelectedSession.Name.Replace(" ", "_").Replace(":", "-");
+        
+        var path = PickSavePath("JSON файл|*.json", $"{sanitizedName}.json");
         if (path is null) return;
         await _exportService.ExportJsonAsync(SelectedSession.Id, path);
     }
@@ -87,8 +93,12 @@ public partial class SessionsViewModel : ObservableObject
     [RelayCommand]
     private async Task ExportMarkdownAsync()
     {
-        if (SelectedSession is null) return;
-        var path = PickSavePath("Markdown файл|*.md", $"{SelectedSession.Name}.md");
+        if (SelectedSession is null) 
+            return;
+        
+        string sanitizedName = SelectedSession.Name.Replace(" ", "_").Replace(":", "-");
+        
+        var path = PickSavePath("Markdown файл|*.md", $"{sanitizedName}.md");
         if (path is null) return;
         await _exportService.ExportMarkdownAsync(SelectedSession.Id, path);
     }
@@ -96,8 +106,12 @@ public partial class SessionsViewModel : ObservableObject
     [RelayCommand]
     private async Task ExportYouTubeChaptersAsync()
     {
-        if (SelectedSession is null) return;
-        var path = PickSavePath("Text файл|*.txt", $"{SelectedSession.Name}_chapters.txt");
+        if (SelectedSession is null) 
+            return;
+        
+        string sanitizedName = SelectedSession.Name.Replace(" ", "_").Replace(":", "-");
+        
+        var path = PickSavePath("Text файл|*.txt", $"{sanitizedName}_chapters.txt");
         if (path is null) return;
         await _exportService.ExportYouTubeChaptersAsync(SelectedSession.Id, path);
     }
@@ -148,14 +162,115 @@ public partial class SessionsViewModel : ObservableObject
     {
         if (session is null) return;
 
+        var result = MessageBox.Show(
+            $"Видалити сесію «{session.Name}» та всі пов'язані відеофайли?\n\nЦю дію неможливо скасувати.",
+            "Підтвердження видалення",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No);
+        
+        if (result != MessageBoxResult.Yes)
+            return;
+        
+        string? sessionDirectory = ResolveSessionDirectory(session);
+        
+        if (sessionDirectory is not null && IsDirectoryShared(sessionDirectory, session.Id))
+        {
+            sessionDirectory = null;
+        }
+        
         await _logService.DeleteSessionAsync(session.Id);
         Sessions.Remove(session);
 
-        if (SelectedSession == session)
+        if (SelectedSession?.Id == session.Id)
         {
             SelectedSession = Sessions.FirstOrDefault();
             Entries.Clear();
         }
+
+        if (sessionDirectory is not null)
+        {
+            await DeleteSessionDirectoryAsync(sessionDirectory, session.Id);
+        }
+    }
+    
+    private static string? ResolveSessionDirectory(RecordingSession session)
+    {
+        if (string.IsNullOrWhiteSpace(session.VideoFilePath))
+            return null;
+
+        try
+        {
+            string? dir = Path.GetDirectoryName(
+                Path.GetFullPath(session.VideoFilePath));
+
+            return string.IsNullOrWhiteSpace(dir) ? null : dir;
+        }
+        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[SessionsViewModel] Invalid VideoFilePath for session {session.Id}: {ex.Message}");
+            return null;
+        }
+    }
+    
+    private bool IsDirectoryShared(string directory, int excludeSessionId)
+    {
+        return Sessions
+            .Where(s => s.Id != excludeSessionId)
+            .Select(s => ResolveSessionDirectory(s))
+            .Any(d => d is not null &&
+                      string.Equals(d, directory, StringComparison.OrdinalIgnoreCase));
+    }
+    
+    private static async Task DeleteSessionDirectoryAsync(string directory, int sessionId)
+    {
+        await Task.Yield();
+
+        if (!Directory.Exists(directory))
+            return;
+
+        const int maxAttempts = 3;
+        const int retryDelayMs = 500;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+                return; 
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SessionsViewModel] Access denied deleting session {sessionId} " +
+                    $"directory (attempt {attempt}/{maxAttempts}): {ex.Message}");
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return;
+            }
+            catch (IOException ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SessionsViewModel] IO error deleting session {sessionId} " +
+                    $"directory (attempt {attempt}/{maxAttempts}): {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SessionsViewModel] Unexpected error deleting session {sessionId} " +
+                    $"directory: {ex}");
+                return;
+            }
+
+            if (attempt < maxAttempts)
+                await Task.Delay(retryDelayMs);
+        }
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[SessionsViewModel] Could not delete directory for session {sessionId} " +
+            $"after {maxAttempts} attempts. Manual cleanup may be required: {directory}");
     }
 
     [RelayCommand]
