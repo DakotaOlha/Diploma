@@ -12,10 +12,15 @@ public partial class OverlayWindow : Window
     private readonly IScreenCaptureService _captureService;
     private readonly IAudioCaptureService  _audioService;
     private readonly DiskSpaceService      _diskSpaceService;
-    private string _videoOutputPath = string.Empty;
 
+    private string    _videoOutputPath = string.Empty;
     private DateTime? _videoStartTime;
     private DateTime? _audioStartTime;
+    
+    private System.Timers.Timer? _updateTimer;
+    private System.Timers.Timer? _diskTimer;
+    
+    private volatile bool _isClosing;
 
     private static readonly SolidColorBrush GreenBrush  = Frozen(0x4C, 0xAF, 0x50);
     private static readonly SolidColorBrush GrayBrush   = Frozen(0x88, 0x88, 0x88);
@@ -35,27 +40,86 @@ public partial class OverlayWindow : Window
         _audioService     = audioService;
         _diskSpaceService = diskSpaceService;
 
-        _captureService.RecordingStarted += (_, _) =>
-        {
-            _videoStartTime = DateTime.Now;
-            _audioStartTime = DateTime.Now;
+        _captureService.RecordingStarted += OnRecordingStarted;
 
-            App.Current.Dispatcher.Invoke(() =>
+        Loaded += OnLoaded;
+        Closed += OnClosed;
+
+        UpdateDiskInfo();
+    }
+    
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+ 
+        _updateTimer = new System.Timers.Timer(200) { AutoReset = true };
+        _updateTimer.Elapsed += OnUpdateTimerElapsed;
+        _updateTimer.Start();
+ 
+        _diskTimer = new System.Timers.Timer(10_000) { AutoReset = true };
+        _diskTimer.Elapsed += OnDiskTimerElapsed;
+        _diskTimer.Start();
+    }
+    
+    private void OnClosed(object sender, EventArgs e)
+    {
+        _isClosing = true;
+ 
+        _updateTimer?.Stop();
+        _diskTimer?.Stop();
+ 
+        _updateTimer?.Dispose();
+        _diskTimer?.Dispose();
+ 
+        _updateTimer = null;
+        _diskTimer   = null;
+ 
+        _captureService.RecordingStarted -= OnRecordingStarted;
+    }
+    
+    private void OnUpdateTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
+    {
+        if (_isClosing || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+            return;
+ 
+        try
+        {
+            Dispatcher.Invoke(UpdateTimers);
+        }
+        catch (TaskCanceledException) { /* Dispatcher shut down mid-flight */ }
+        catch (InvalidOperationException) { /* Dispatcher already shut down */ }
+    }
+    
+    private void OnDiskTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
+    {
+        if (_isClosing || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+            return;
+ 
+        try
+        {
+            Dispatcher.Invoke(UpdateDiskInfo);
+        }
+        catch (TaskCanceledException) { }
+        catch (InvalidOperationException) { }
+    }
+    
+    private void OnRecordingStarted(object? sender, EventArgs e)
+    {
+        _videoStartTime = DateTime.Now;
+        _audioStartTime = DateTime.Now;
+ 
+        if (_isClosing || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+            return;
+ 
+        try
+        {
+            Dispatcher.Invoke(() =>
             {
                 VideoStatusDot.Foreground = GreenBrush;
                 AudioStatusDot.Foreground = GreenBrush;
             });
-        };
-
-        var timer = new System.Timers.Timer(200);
-        timer.Elapsed += (_, _) => App.Current.Dispatcher.Invoke(UpdateTimers);
-        timer.Start();
-
-        var diskTimer = new System.Timers.Timer(10_000);
-        diskTimer.Elapsed += (_, _) => App.Current.Dispatcher.Invoke(UpdateDiskInfo);
-        diskTimer.Start();
-
-        UpdateDiskInfo();
+        }
+        catch (TaskCanceledException) { }
+        catch (InvalidOperationException) { }
     }
 
     public void SetOutputPath(string path) => _videoOutputPath = path;
@@ -110,7 +174,7 @@ public partial class OverlayWindow : Window
     private void UpdateTimers()
     {
         var now = DateTime.Now;
-
+        
         if (_videoStartTime.HasValue && _captureService.IsRecording)
         {
             var elapsed = now - _videoStartTime.Value;
@@ -124,7 +188,7 @@ public partial class OverlayWindow : Window
             VideoTimerText.Foreground = GrayBrush;
             VideoStatusDot.Foreground = GrayBrush;
         }
-
+ 
         if (_audioStartTime.HasValue && _audioService.IsRecording)
         {
             var elapsed = now - _audioStartTime.Value;
@@ -138,18 +202,18 @@ public partial class OverlayWindow : Window
             AudioTimerText.Foreground = GrayBrush;
             AudioStatusDot.Foreground = GrayBrush;
         }
-
+ 
         if (_videoStartTime.HasValue && _audioStartTime.HasValue
             && _captureService.IsRecording && _audioService.IsRecording)
         {
             var videoDelta = (now - _videoStartTime.Value).TotalSeconds;
             var audioDelta = (now - _audioStartTime.Value).TotalSeconds;
             var delta      = videoDelta - audioDelta;
-
+ 
             DeltaText.Text = $"Δ {delta:+0.0;-0.0;0.0}s " +
                              (delta > 0 ? "(audio lags)" :
                               delta < 0 ? "(video lags)" : "(in sync)");
-
+ 
             DeltaText.Foreground = Math.Abs(delta) > 1.0 ? RedBrush : GrayBrush;
         }
         else
@@ -157,7 +221,7 @@ public partial class OverlayWindow : Window
             DeltaText.Text       = "Δ —";
             DeltaText.Foreground = GrayBrush;
         }
-
+ 
         if (!_captureService.IsRecording && _videoStartTime.HasValue)
         {
             _videoStartTime = null;
@@ -167,7 +231,8 @@ public partial class OverlayWindow : Window
 
     private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ButtonState == MouseButtonState.Pressed) DragMove();
+        if (e.ButtonState == MouseButtonState.Pressed) 
+            DragMove();
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Hide();
