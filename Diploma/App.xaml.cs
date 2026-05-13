@@ -14,9 +14,11 @@ namespace Diploma;
 
 public partial class App : Application
 {
-    private IHost _host = null!;
+    private IHost        _host     = null!;
     private TaskbarIcon? _trayIcon;
 
+    private int _shutdownGuard;
+    
     protected override async void OnStartup(StartupEventArgs e)
     {
         Log.Logger = new LoggerConfiguration()
@@ -36,9 +38,9 @@ public partial class App : Application
 
                 services.AddSingleton<ILogService>(_ => new LogService(connStr));
                 services.AddSingleton<IInputMonitorService, InputMonitorService>();
-                services.AddSingleton<IAudioCaptureService, AudioCaptureService>();
+                services.AddSingleton<IAudioCaptureService,  AudioCaptureService>();
                 services.AddSingleton<IScreenCaptureService, ScreenCaptureService>();
-                services.AddSingleton<IGlobalHotkeyService, GlobalHotkeyService>();
+                services.AddSingleton<IGlobalHotkeyService,  GlobalHotkeyService>();
                 services.AddSingleton<ModeProfileService>();
                 services.AddSingleton<DiskSpaceService>();
                 services.AddSingleton<MediaMergeService>();
@@ -87,6 +89,69 @@ public partial class App : Application
         base.OnStartup(e);
     }
 
+    protected override async void OnExit(ExitEventArgs e)
+    {
+        if (Interlocked.Exchange(ref _shutdownGuard, 1) == 1)
+        {
+            base.OnExit(e);
+            return;
+        }
+
+        try
+        {
+            var hotkeyService = _host.Services.GetRequiredService<IGlobalHotkeyService>();
+            hotkeyService.Stop();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to stop hotkey service");
+        }
+
+        try
+        {
+            var vm = _host.Services.GetRequiredService<MainViewModel>();
+            if (vm.IsRecording)
+            {
+                Log.Information("OnExit: recording still active — stopping pipeline…");
+
+                await vm.StopRecordingCommand.ExecuteAsync(null);
+
+                Log.Information("OnExit: recording pipeline finished.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "OnExit: error while stopping recording");
+        }
+
+        try
+        {
+            var player = _host.Services.GetRequiredService<PlayerViewModel>();
+            player.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "OnExit: error while disposing PlayerViewModel");
+        }
+
+        try
+        {
+            if (_host.Services.GetRequiredService<ILogService>() is IAsyncDisposable logService)
+                await logService.DisposeAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "OnExit: error while disposing LogService");
+        }
+
+        await _host.StopAsync();
+
+        _trayIcon?.Dispose();
+
+        Log.CloseAndFlush();
+        base.OnExit(e);
+    }
+
     private TaskbarIcon BuildTrayIcon()
     {
         var openItem = new System.Windows.Controls.MenuItem
@@ -110,11 +175,7 @@ public partial class App : Application
         };
 
         var exitItem = new System.Windows.Controls.MenuItem { Header = "Вийти" };
-        exitItem.Click += (_, _) =>
-        {
-            _trayIcon?.Dispose();
-            Shutdown();
-        };
+        exitItem.Click += (_, _) => RequestShutdown();
 
         var menu = new System.Windows.Controls.ContextMenu();
         menu.Items.Add(openItem);
@@ -134,30 +195,48 @@ public partial class App : Application
         return icon;
     }
 
+    private async void RequestShutdown()
+    {
+        var vm = _host.Services.GetRequiredService<MainViewModel>();
+
+        if (vm.IsRecording)
+        {
+            ShowMainWindow();
+
+            var result = MessageBox.Show(
+                MainWindow,
+                "Запис ще триває. Зупинити запис і вийти з програми?",
+                "AlgoReplay",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+
+            if (result != MessageBoxResult.Yes)
+                return;
+
+            _trayIcon!.ContextMenu.IsEnabled = false;
+            try
+            {
+                await vm.StopRecordingCommand.ExecuteAsync(null);
+            }
+            finally
+            {
+                _trayIcon.ContextMenu.IsEnabled = true;
+            }
+        }
+
+        Shutdown();
+    }
+    
     private void ShowMainWindow()
     {
         var win = _host.Services.GetRequiredService<MainWindow>();
         win.Show();
-        if (win.WindowState == System.Windows.WindowState.Minimized)
-            win.WindowState = System.Windows.WindowState.Normal;
+        if (win.WindowState == WindowState.Minimized)
+            win.WindowState = WindowState.Normal;
         win.Activate();
     }
 
     public OverlayWindow GetOverlay() =>
         _host.Services.GetRequiredService<OverlayWindow>();
-
-    protected override async void OnExit(ExitEventArgs e)
-    {
-        _trayIcon?.Dispose();
-
-        var player = _host.Services.GetRequiredService<PlayerViewModel>();
-        player.Dispose();
-
-        if (_host.Services.GetRequiredService<ILogService>() is IAsyncDisposable logService)
-            await logService.DisposeAsync();
-
-        await _host.StopAsync();
-        Log.CloseAndFlush();
-        base.OnExit(e);
-    }
 }
