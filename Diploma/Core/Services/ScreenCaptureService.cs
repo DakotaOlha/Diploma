@@ -1,4 +1,5 @@
 ﻿using System.Buffers;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -23,6 +24,14 @@ using WinRT;
 
 namespace Diploma.Core.Services;
 
+internal enum CaptureState
+{
+    Idle      = 0,
+    Prepared  = 1,
+    Recording = 2,
+    Stopping  = 3,
+}
+
 public class ScreenCaptureService : IScreenCaptureService, IDisposable
 {
     private const int HighFrameRate = 30;
@@ -35,16 +44,29 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     private const int  ChannelCapacity     = 8;
     private const int  FirstFrameTimeoutMs = 5_000;
     private const long SnapshotIntervalMs  = 200;
-    private const int LogRingCapacity = 50;
-
-    private TaskCompletionSource<bool>? _stopRequested;
-
-    private CancellationTokenSource? _cts;
-    private Task? _captureTask;
-    private Task? _encodeTask;
-
+    private const int  LogRingCapacity     = 50;
+    
+    private int _state = (int)CaptureState.Idle;
+    
+    private CaptureState State
+    {
+        get => (CaptureState)Volatile.Read(ref _state);
+    }
+    
+    private bool TryTransition(CaptureState expected, CaptureState next)
+        => Interlocked.CompareExchange(ref _state, (int)next, (int)expected)
+           == (int)expected;
+    
+    private string?                  _outputPath;
+    private GraphicsCaptureItem?     _captureItem;
+    private IDirect3DDevice?         _winrtDevice;
     private Channel<BgraVideoFrame>? _frameChannel;
-    private volatile bool _isRecording;
+    
+    private CancellationTokenSource? _cts;
+    private Task?                    _captureTask;
+    private Task?                    _encodeTask;
+    private TaskCompletionSource<bool>? _stopRequested;
+    
     private bool _disposed;
 
     private readonly object _snapshotLock   = new();
@@ -62,15 +84,14 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     private long _droppedFramesTotal;
     private long _droppedFramesWindow;
     private long _deliveredFramesWindow;
-
     private volatile int _targetFrameRate = HighFrameRate;
 
     private readonly object   _logLock  = new();
     private readonly string[] _logRing  = new string[LogRingCapacity];
-    private int               _logHead  = 0;
-    private int               _logCount = 0;
+    private int               _logHead;
+    private int               _logCount;
 
-    public bool IsRecording => _isRecording;
+    public bool IsRecording => State == CaptureState.Recording;
 
     public event EventHandler<string>? StatusChanged;
     public event EventHandler?         RecordingStarted;
@@ -89,130 +110,204 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     private static extern int CreateDirect3D11DeviceFromDXGIDevice(
         IntPtr dxgiDevice, out IntPtr graphicsDevice);
 
-    public async Task<bool> StartAsync(string outputPath, CancellationToken ct = default)
+    public async Task PrepareAsync(string outputPath, CancellationToken ct = default)
     {
-        if (_isRecording) return false;
-
-        var item = await Application.Current.Dispatcher.InvokeAsync(async () =>
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        
+        if (!TryTransition(CaptureState.Idle, CaptureState.Prepared))
         {
-            var hwnd = new WindowInteropHelper(Application.Current.MainWindow).Handle;
-            return await CapturePickerHelper.PickAsync(hwnd);
-        }).Task.Unwrap();
-
-        if (item == null) return false;
-
-        _targetFrameRate       = HighFrameRate;
-        _droppedFramesTotal    = 0;
-        _droppedFramesWindow   = 0;
-        _deliveredFramesWindow = 0;
-
+            throw new InvalidOperationException(
+                $"PrepareAsync can only be called from the Idle state (current: {State}).");
+        }
+        
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+ 
+            Log("Opening capture-target picker…");
+ 
+            var item = await Application.Current.Dispatcher.InvokeAsync(async () =>
+            {
+                var hwnd = new WindowInteropHelper(Application.Current.MainWindow).Handle;
+                return await CapturePickerHelper.PickAsync(hwnd);
+            }).Task.Unwrap().ConfigureAwait(false);
+ 
+            if (item is null)
+            {
+                Log("Picker cancelled by user.");
+                Interlocked.Exchange(ref _state, (int)CaptureState.Idle);
+                throw new OperationCanceledException("Capture target picker was cancelled.");
+            }
+ 
+            ct.ThrowIfCancellationRequested();
+ 
+            Log("Initialising D3D device…");
+            var winrtDevice = CreateD3DDevice();
+ 
+            var channel = Channel.CreateBounded<BgraVideoFrame>(
+                new BoundedChannelOptions(ChannelCapacity)
+                {
+                    FullMode     = BoundedChannelFullMode.DropOldest,
+                    SingleWriter = true,
+                    SingleReader = true,
+                });
+ 
+            _outputPath   = outputPath;
+            _captureItem  = item;
+            _winrtDevice  = winrtDevice;
+            _frameChannel = channel;
+ 
+            _targetFrameRate       = HighFrameRate;
+            _droppedFramesTotal    = 0;
+            _droppedFramesWindow   = 0;
+            _deliveredFramesWindow = 0;
+ 
+            Log("Preparation complete — ready to begin capture.");
+ 
+            CaptureTargetSelected?.Invoke(this, EventArgs.Empty);
+        }
+        catch
+        {
+            Interlocked.Exchange(ref _state, (int)CaptureState.Idle);
+            ResetD3DState();
+            _outputPath  = null;
+            _captureItem = null;
+            _winrtDevice = null;
+            _frameChannel?.Writer.TryComplete();
+            _frameChannel = null;
+            throw;
+        }
+    }
+    
+    public async Task BeginCaptureAsync(CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+ 
+        if (!TryTransition(CaptureState.Prepared, CaptureState.Recording))
+        {
+            throw new InvalidOperationException(
+                $"BeginCaptureAsync requires Prepared state (current: {State}).");
+        }
+ 
+        if (_captureItem is null || _frameChannel is null || _outputPath is null)
+        {
+            Interlocked.Exchange(ref _state, (int)CaptureState.Idle);
+            throw new InvalidOperationException(
+                "Capture context is missing. Call PrepareAsync first.");
+        }
+ 
+        ct.ThrowIfCancellationRequested();
+ 
         _stopRequested = new TaskCompletionSource<bool>(
             TaskCreationOptions.RunContinuationsAsynchronously);
-
-        _frameChannel = Channel.CreateBounded<BgraVideoFrame>(
-            new BoundedChannelOptions(ChannelCapacity)
+ 
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+ 
+        Log("Beginning capture…");
+ 
+        _captureTask = Task.Run(
+            () => CaptureLoopAsync(_captureItem, _outputPath, _winrtDevice!, _cts.Token),
+            _cts.Token);
+        
+        var startupCheck = await Task.WhenAny(
+                _captureTask,
+                Task.Delay(100, _cts.Token))
+            .ConfigureAwait(false);
+ 
+        if (startupCheck == _captureTask)
+        {
+            try { await _captureTask.ConfigureAwait(false); }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
             {
-                FullMode     = BoundedChannelFullMode.DropOldest,
-                SingleWriter = true,
-                SingleReader = true,
-            });
-
-        _cts         = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        _isRecording = true;
-
-        CaptureTargetSelected?.Invoke(this, EventArgs.Empty);
-        _captureTask = Task.Run(() => CaptureLoopAsync(item, outputPath, _cts.Token));
-
-        return true;
+                Log($"Capture startup failed: {ex.Message}");
+                // Roll back to Idle.
+                await StopAsync().ConfigureAwait(false);
+                throw;
+            }
+        }
     }
 
     public async Task StopAsync()
     {
-        if (!_isRecording) return;
-
-        _isRecording = false;
-
-        _stopRequested?.TrySetResult(true);
-
-        if (_encodeTask != null)
+        var prev = (CaptureState)Interlocked.CompareExchange(
+            ref _state,
+            (int)CaptureState.Stopping,
+            (int)CaptureState.Recording);
+ 
+        if (prev == CaptureState.Idle || prev == CaptureState.Stopping)
+            return;
+ 
+        if (prev == CaptureState.Prepared)
         {
-            var finalized = await Task.WhenAny(_encodeTask, Task.Delay(30_000));
-            if (finalized != _encodeTask)
+            Interlocked.Exchange(ref _state, (int)CaptureState.Stopping);
+        }
+ 
+        Log("Stop requested…");
+ 
+        _stopRequested?.TrySetResult(true);
+ 
+        if (_encodeTask is not null)
+        {
+            var finished = await Task.WhenAny(_encodeTask, Task.Delay(30_000))
+                .ConfigureAwait(false);
+ 
+            if (finished != _encodeTask)
             {
-                Log("StopAsync: encode did not finish in 30 s — forcing cancel");
+                Log("StopAsync: encode did not finish in 30 s — forcing cancel.");
                 _cts?.Cancel();
             }
         }
-
+        
         _cts?.Cancel();
-
-        if (_captureTask != null)
+ 
+        if (_captureTask is not null)
         {
             try   { await _captureTask.ConfigureAwait(false); }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException) { /* expected */ }
+            catch (Exception ex) { Log($"CaptureTask error on stop: {ex.Message}"); }
         }
-
+ 
         ResetD3DState();
-        Log("Recording stopped");
+        CleanupPrepareContext();
+ 
+        _cts?.Dispose();
+        _cts = null;
+ 
+        Interlocked.Exchange(ref _state, (int)CaptureState.Idle);
+        Log("Recording stopped — service returned to Idle.");
     }
-
-    public async Task<string?> TakeScreenshotAsync(string outputDir)
+    
+    private void CleanupPrepareContext()
     {
-        byte[]? snapshot;
-        int width, height;
-
-        lock (_snapshotLock)
-        {
-            snapshot = _latestFrame;
-            width    = _latestFrameWidth;
-            height   = _latestFrameHeight;
-        }
-
-        if (snapshot is null || width == 0 || height == 0) return null;
-
-        var fileName   = $"screenshot_{DateTime.Now:yyyyMMdd_HHmmss_fff}.png";
-        var outputPath = Path.Combine(outputDir, fileName);
-
-        await Task.Run(() => SaveBgraToPng(snapshot, width, height, outputPath));
-        return outputPath;
-    }
-
-    public BitmapSource? GetLatestFrameAsBitmap()
-    {
-        byte[]? snapshot;
-        int width, height;
-
-        lock (_snapshotLock)
-        {
-            snapshot = _latestFrame;
-            width    = _latestFrameWidth;
-            height   = _latestFrameHeight;
-        }
-
-        if (snapshot is null || width == 0 || height == 0) return null;
-
-        return BitmapSource.Create(width, height, 96, 96,
-            PixelFormats.Bgra32, null, snapshot, width * 4);
+        _outputPath  = null;
+        _captureItem = null;
+        _winrtDevice = null;
+        _frameChannel?.Writer.TryComplete();
+        _frameChannel = null;
+        _stopRequested = null;
+        _captureTask   = null;
+        _encodeTask    = null;
     }
 
     private async Task CaptureLoopAsync(
         GraphicsCaptureItem item,
         string outputPath,
+        IDirect3DDevice winrtDevice,
         CancellationToken token)
     {
         var writer = _frameChannel!.Writer;
-
+ 
+        Direct3D11CaptureFramePool? framePool = null;
+        GraphicsCaptureSession?     session   = null;
+ 
         try
         {
-            Log("Capture target selected, initialising D3D…");
-
-            var winrtDevice = CreateD3DDevice();
-            int width       = item.Size.Width;
-            int height      = item.Size.Height;
-
-            Direct3D11CaptureFramePool? framePool = null;
-            GraphicsCaptureSession?     session   = null;
-
+            Log("Initialising WinRT capture session…");
+ 
+            int width  = item.Size.Width;
+            int height = item.Size.Height;
+ 
             await Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
@@ -220,39 +315,37 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                     DirectXPixelFormat.B8G8R8A8UIntNormalized,
                     2,
                     item.Size);
-
+ 
                 session = framePool.CreateCaptureSession(item);
                 session.IsCursorCaptureEnabled = true;
-
+ 
                 framePool.FrameArrived += (pool, _) =>
                 {
                     if (_stopRequested?.Task.IsCompleted == true) return;
-
+ 
                     using var frame = pool.TryGetNextFrame();
                     if (frame is null) return;
-
+ 
                     var bytes = ConvertFrameToBytes(frame, width, height);
                     if (bytes is null) return;
-
+ 
                     var videoFrame = new BgraVideoFrame(bytes, width, height, pooled: true);
-
-                    bool accepted = writer.TryWrite(videoFrame);
-
-                    if (!accepted)
+ 
+                    if (!writer.TryWrite(videoFrame))
                     {
                         Interlocked.Increment(ref _droppedFramesTotal);
                         Interlocked.Increment(ref _droppedFramesWindow);
                         videoFrame.Return();
                     }
                 };
-
+ 
                 session.StartCapture();
             });
-
+ 
             using var firstFrameCts = new CancellationTokenSource(FirstFrameTimeoutMs);
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-                                   token, firstFrameCts.Token);
-
+            using var linked        = CancellationTokenSource.CreateLinkedTokenSource(
+                                          token, firstFrameCts.Token);
+ 
             bool gotFirstFrame = false;
             try
             {
@@ -262,25 +355,19 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                     break;
                 }
             }
-            catch (OperationCanceledException) { }
-
-            if (!gotFirstFrame)
+            catch (OperationCanceledException) { /* timeout or external cancel */ }
+ 
+            if (!gotFirstFrame || token.IsCancellationRequested)
             {
                 Log("No frames received within timeout — aborting.");
-                await Application.Current.Dispatcher.InvokeAsync(() =>
-                {
-                    session?.Dispose();
-                    framePool?.Dispose();
-                });
-                writer.Complete();
                 return;
             }
-
-            Log("First frame received — starting encode…");
+ 
+            Log("First frame received — firing RecordingStarted, starting encode…");
             RecordingStarted?.Invoke(this, EventArgs.Empty);
-
+ 
             _encodeTask = Task.Run(() => EncodeLoopAsync(outputPath, width, height));
-
+ 
             try
             {
                 await Task.WhenAny(
@@ -288,19 +375,23 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                     Task.Delay(Timeout.Infinite, token));
             }
             catch (OperationCanceledException) { }
-
-            await Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                session?.Dispose();
-                framePool?.Dispose();
-            });
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            Log("CaptureLoop cancelled.");
+        }
+        catch (Exception ex)
         {
             Log($"Capture error: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                session?.Dispose();
+                framePool?.Dispose();
+            });
+ 
             writer.TryComplete();
         }
     }
@@ -309,87 +400,82 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     {
         var windowStart      = Environment.TickCount64;
         int currentFrameRate = _targetFrameRate;
-
+ 
         IEnumerable<IVideoFrame> FrameSource()
         {
             var reader = _frameChannel!.Reader;
-
+ 
             BgraVideoFrame? lastFrame   = null;
             BgraVideoFrame? prevYielded = null;
-
+ 
             while (!reader.TryRead(out lastFrame))
             {
                 if (reader.Completion.IsCompleted) yield break;
                 Thread.SpinWait(100);
             }
-
+ 
             if (lastFrame is null) yield break;
-
+ 
             timeBeginPeriod(1);
-
             try
             {
                 while (!reader.Completion.IsCompleted || reader.TryRead(out _))
                 {
                     prevYielded?.Return();
                     prevYielded = null;
-
+ 
                     while (reader.TryRead(out var newFrame))
                     {
                         if (!ReferenceEquals(lastFrame, newFrame))
                             lastFrame.Return();
                         lastFrame = newFrame;
                     }
-
-                    if (lastFrame == null) break;
-
+ 
+                    if (lastFrame is null) break;
+ 
                     var nowMs     = Environment.TickCount64;
                     var windowLen = nowMs - windowStart;
-
+ 
                     if (windowLen >= AdaptiveWindowSeconds * 1000L)
                     {
                         long dropped   = Interlocked.Exchange(ref _droppedFramesWindow, 0);
                         long delivered = Interlocked.Exchange(ref _deliveredFramesWindow, 0);
                         long total     = dropped + delivered;
-
                         double dropRate = total > 0 ? (double)dropped / total : 0.0;
-
+ 
                         int newRate = _targetFrameRate;
                         if (dropRate > DropRateHighThreshold && _targetFrameRate == HighFrameRate)
                         {
                             newRate = LowFrameRate;
-                            Log($"Adaptive: drop rate {dropRate:P0} > {DropRateHighThreshold:P0}" +
-                                $" → lowering fps to {LowFrameRate}");
+                            Log($"Adaptive: drop rate {dropRate:P0} → lowering fps to {LowFrameRate}");
                         }
                         else if (dropRate < DropRateLowThreshold && _targetFrameRate == LowFrameRate)
                         {
                             newRate = HighFrameRate;
-                            Log($"Adaptive: drop rate {dropRate:P0} < {DropRateLowThreshold:P0}" +
-                                $" → restoring fps to {HighFrameRate}");
+                            Log($"Adaptive: drop rate {dropRate:P0} → restoring fps to {HighFrameRate}");
                         }
-
+ 
                         _targetFrameRate = newRate;
                         currentFrameRate = newRate;
-
+ 
                         var totalDropped = Interlocked.Read(ref _droppedFramesTotal);
                         RaiseDropStats(totalDropped, dropRate, currentFrameRate);
-
+ 
                         windowStart = nowMs;
                     }
-
+ 
                     Interlocked.Increment(ref _deliveredFramesWindow);
-
+ 
                     prevYielded = lastFrame;
                     yield return lastFrame;
-
+ 
                     long frameBudgetMs = (long)(1000.0 / currentFrameRate);
                     long remaining     = frameBudgetMs;
-
-                    const int SliceMs = 4;
+                    const int SliceMs  = 4;
                     while (remaining > 0)
                     {
                         if (reader.Completion.IsCompleted) break;
-                        if (reader.TryPeek(out _)) break;
+                        if (reader.TryPeek(out _))         break;
                         int slice = (int)Math.Min(remaining, SliceMs);
                         Thread.Sleep(slice);
                         remaining -= slice;
@@ -402,18 +488,18 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                 prevYielded?.Return();
             }
         }
-
+ 
         var videoSource = new RawVideoPipeSource(FrameSource())
         {
-            FrameRate = HighFrameRate
+            FrameRate = HighFrameRate,
         };
-
+ 
         try
         {
             Log("FFmpeg encode started…");
-
+ 
             var videoEncoder = HardwareEncoderDetector.Detect();
-
+ 
             var encodeTask = FFMpegArguments
                 .FromPipeInput(videoSource, opts => opts
                     .WithVideoCodec("rawvideo")
@@ -423,7 +509,7 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                 {
                     opts.WithVideoCodec(videoEncoder)
                         .WithCustomArgument("-pix_fmt yuv420p");
-
+ 
                     switch (videoEncoder)
                     {
                         case "libx264":
@@ -447,12 +533,12 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                     }
                 })
                 .ProcessAsynchronously();
-
+ 
             var success = await encodeTask;
-
+ 
             if (success) Log("Encode finished — MP4 fully written.");
             else         Log("Encode finished with errors.");
-
+ 
             var totalDropped = Interlocked.Read(ref _droppedFramesTotal);
             if (totalDropped > 0)
                 Log($"Total frames dropped during session: {totalDropped}");
@@ -462,7 +548,46 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
             Log($"Encode error: {ex.GetType().Name}: {ex.Message}");
         }
     }
+    
+    public async Task<string?> TakeScreenshotAsync(string outputDir)
+    {
+        byte[]? snapshot;
+        int width, height;
 
+        lock (_snapshotLock)
+        {
+            snapshot = _latestFrame;
+            width    = _latestFrameWidth;
+            height   = _latestFrameHeight;
+        }
+
+        if (snapshot is null || width == 0 || height == 0) return null;
+
+        var fileName   = $"screenshot_{DateTime.Now.ToString("yyyyMMdd_HHmmss_fff", CultureInfo.InvariantCulture)}.png";
+        var outputPath = Path.Combine(outputDir, fileName);
+
+        await Task.Run(() => SaveBgraToPng(snapshot, width, height, outputPath));
+        return outputPath;
+    }
+
+    public BitmapSource? GetLatestFrameAsBitmap()
+    {
+        byte[]? snapshot;
+        int width, height;
+
+        lock (_snapshotLock)
+        {
+            snapshot = _latestFrame;
+            width    = _latestFrameWidth;
+            height   = _latestFrameHeight;
+        }
+
+        if (snapshot is null || width == 0 || height == 0) return null;
+
+        return BitmapSource.Create(width, height, 96, 96,
+            PixelFormats.Bgra32, null, snapshot, width * 4);
+    }
+    
     private IDirect3DDevice CreateD3DDevice()
     {
         D3D11.D3D11CreateDevice(
@@ -487,22 +612,21 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     private byte[]? ConvertFrameToBytes(Direct3D11CaptureFrame frame, int width, int height)
     {
         if (_d3dDevice is null || _d3dContext is null) return null;
-
+ 
         try
         {
             var access     = frame.Surface.As<IDirect3DDxgiInterfaceAccess>();
             var texturePtr = access.GetInterface(typeof(ID3D11Texture2D).GUID);
             if (texturePtr == IntPtr.Zero) return null;
-
+ 
             using var texture = new ID3D11Texture2D(texturePtr);
             var desc = texture.Description;
-
+ 
             lock (_stagingLock)
             {
                 if (_stagingTexture is null || _stagingSize != (desc.Width, desc.Height))
                 {
                     _stagingTexture?.Dispose();
-
                     _stagingTexture = _d3dDevice.CreateTexture2D(new Texture2DDescription
                     {
                         Width             = desc.Width,
@@ -515,13 +639,12 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                         BindFlags         = BindFlags.None,
                         CPUAccessFlags    = CpuAccessFlags.Read,
                     });
-
-                    _stagingSize = ((int W, int H))(desc.Width, desc.Height);
+                    _stagingSize = ((int)desc.Width, (int)desc.Height);
                     Log($"StagingTexture (re)created: {desc.Width}×{desc.Height}");
                 }
-
+ 
                 _d3dContext.CopyResource(_stagingTexture, texture);
-
+ 
                 var mapped = _d3dContext.Map(_stagingTexture, 0, MapMode.Read, MapFlags.None);
                 try
                 {
@@ -535,23 +658,23 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                                 .CopyTo(new Span<byte>(data, y * width * 4, width * 4));
                         }
                     }
-
+ 
                     var nowMs = Environment.TickCount64;
                     if (nowMs - _lastSnapshotTickMs >= SnapshotIntervalMs)
                     {
                         var snapshot = new byte[width * height * 4];
                         Buffer.BlockCopy(data, 0, snapshot, 0, snapshot.Length);
-
+ 
                         lock (_snapshotLock)
                         {
                             _latestFrame       = snapshot;
                             _latestFrameWidth  = width;
                             _latestFrameHeight = height;
                         }
-
+ 
                         _lastSnapshotTickMs = nowMs;
                     }
-
+ 
                     return data;
                 }
                 finally
@@ -595,16 +718,12 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
             _logCount = Math.Min(_logCount + 1, LogRingCapacity);
  
             int count = _logCount;
-            int start = count < LogRingCapacity
-                ? 0
-                : _logHead;
+            int start = count < LogRingCapacity ? 0 : _logHead;
  
             var sb = new StringBuilder(count * 80);
             for (int i = 0; i < count; i++)
-            {
-                int idx = (start + i) % LogRingCapacity;
-                sb.AppendLine(_logRing[idx]);
-            }
+                sb.AppendLine(_logRing[(start + i) % LogRingCapacity]);
+ 
             snapshot = sb.ToString();
         }
  
