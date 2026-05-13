@@ -10,6 +10,8 @@ public class ExportService
 {
     private readonly ILogService _logService;
 
+    private static readonly TimeSpan ChapterMinInterval = TimeSpan.FromMinutes(2);
+
     public ExportService(ILogService logService)
     {
         _logService = logService;
@@ -35,7 +37,7 @@ public class ExportService
             entries = entries.Select(e => new
             {
                 e.Id,
-                offset = e.Offset.TotalSeconds,
+                offset          = e.Offset.TotalSeconds,
                 offsetFormatted = $"{e.Offset:mm\\:ss\\.f}",
                 e.EventType,
                 e.Description,
@@ -95,20 +97,54 @@ public class ExportService
         var entries = await _logService.GetEntriesAsync(sessionId);
 
         var sb = new StringBuilder();
-
         sb.AppendLine("00:00 Початок");
+
+        var lastChapterOffset = new Dictionary<string, TimeSpan>();
 
         foreach (var e in entries)
         {
-            if (!IsChapterWorthy(e.EventType)) continue;
+            if (!IsChapterWorthy(e.EventType))
+                continue;
 
-            var ts = FormatYouTubeTimestamp(e.Offset);
-            var label = BuildChapterLabel(e);
-            sb.AppendLine($"{ts} {label}");
+            if (IsThrottled(e.EventType, e.Offset, lastChapterOffset))
+                continue;
+
+            lastChapterOffset[e.EventType] = e.Offset;
+
+            sb.AppendLine($"{FormatYouTubeTimestamp(e.Offset)} {BuildChapterLabel(e)}");
         }
 
         await File.WriteAllTextAsync(path, sb.ToString(), Encoding.UTF8);
     }
+
+    private static bool IsThrottled(
+        string                      eventType,
+        TimeSpan                    currentOffset,
+        Dictionary<string, TimeSpan> lastChapterOffset)
+    {
+        if (!lastChapterOffset.TryGetValue(eventType, out var lastOffset))
+            return false;
+
+        return (currentOffset - lastOffset) < ChapterMinInterval;
+    }
+
+    private static bool IsChapterWorthy(string eventType) => eventType switch
+    {
+        EventTypes.ManualMarker => true,
+        EventTypes.RunOrDebug   => true,
+        EventTypes.IdleStart    => true,
+        EventTypes.IdeOpened    => true,
+        _                       => false
+    };
+
+    private static string BuildChapterLabel(LogEntry entry) => entry.EventType switch
+    {
+        EventTypes.ManualMarker => entry.Description,
+        EventTypes.RunOrDebug   => $"▶ {entry.Description}",
+        EventTypes.IdleStart    => "⏸ Пауза",
+        EventTypes.IdeOpened    => $"🖥 {entry.Description}",
+        _ => entry.Description
+    };
 
     private static string FormatYouTubeTimestamp(TimeSpan offset)
     {
@@ -116,26 +152,6 @@ public class ExportService
             ? $"{(int)offset.TotalHours}:{offset.Minutes:D2}:{offset.Seconds:D2}"
             : $"{offset.Minutes:D2}:{offset.Seconds:D2}";
     }
-
-    private static bool IsChapterWorthy(string eventType) => eventType switch
-    {
-        EventTypes.ManualMarker  => true,
-        EventTypes.RunOrDebug    => true,
-        EventTypes.FileSave      => true,
-        EventTypes.IdleStart     => true,
-        EventTypes.IdeOpened     => true,
-        _                        => false
-    };
-
-    private static string BuildChapterLabel(LogEntry entry) => entry.EventType switch
-    {
-        EventTypes.ManualMarker => entry.Description,
-        EventTypes.RunOrDebug   => $"▶ {entry.Description}",
-        EventTypes.FileSave     => $"💾 {entry.Description}",
-        EventTypes.IdleStart    => "⏸ Пауза",
-        EventTypes.IdeOpened    => $"🖥 {entry.Description}",
-        _                       => entry.Description
-    };
 
     private static string EscapeMd(string text) =>
         text.Replace("|", "\\|").Replace("\n", " ").Replace("\r", "");

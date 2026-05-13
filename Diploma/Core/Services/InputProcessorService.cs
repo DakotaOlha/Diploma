@@ -9,13 +9,14 @@ public class InputProcessorService : IInputProcessorService
 {
     private readonly ILogService _logService;
     private readonly ModeProfileService _profileService;
-    private ModeProfile _currentProfile;
+
+    private volatile ModeProfile _currentProfile;
 
     public InputProcessorService(ILogService logService, ModeProfileService profileService)
     {
-        _logService      = logService;
-        _profileService  = profileService;
-        _currentProfile  = profileService.GetProfile(RecordingMode.Personal);
+        _logService     = logService;
+        _profileService = profileService;
+        _currentProfile = profileService.GetProfile(RecordingMode.Personal);
     }
 
     public void SetMode(RecordingMode mode)
@@ -25,23 +26,28 @@ public class InputProcessorService : IInputProcessorService
 
     public async Task ProcessShortcutAsync(int sessionId, Keys key, bool ctrl, bool shift)
     {
-        if (!ctrl && key != Keys.F5) return;
+        int foregroundPid = WindowHelper.GetActiveWindowProcessId();
+        if (foregroundPid != 0 && foregroundPid == Environment.ProcessId)
+            return;
+
+        if (!ctrl && key != Keys.F5)
+            return;
 
         switch (key)
         {
-            case Keys.Z:
+            case Keys.Z when ctrl:
                 await LogIfAllowed(sessionId, EventTypes.Undo, "Undo action triggered");
                 break;
 
-            case Keys.C:
+            case Keys.C when ctrl:
                 await LogIfAllowed(sessionId, EventTypes.ClipboardCopy, "User copied data");
                 break;
 
-            case Keys.V:
+            case Keys.V when ctrl:
                 await LogIfAllowed(sessionId, EventTypes.ClipboardPaste, "User pasted data");
                 break;
 
-            case Keys.S:
+            case Keys.S when ctrl:
                 var title = WindowHelper.GetActiveWindowTitle();
                 await LogIfAllowed(sessionId, EventTypes.FileSave, "File saved", title);
                 break;
@@ -54,11 +60,12 @@ public class InputProcessorService : IInputProcessorService
                 break;
         }
     }
-
+    
     private async Task LogIfAllowed(int sessionId, string eventType,
-                                     string description, string? metadata = null)
+                                    string description, string? metadata = null)
     {
-        if (_currentProfile.IsAllowed(eventType))
+        var profile = _currentProfile;
+        if (profile.IsAllowed(eventType))
             await _logService.LogEventAsync(sessionId, eventType, description, metadata);
     }
 }

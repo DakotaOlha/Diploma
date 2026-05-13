@@ -24,35 +24,41 @@ public partial class PlayerView : UserControl
         DataContext = viewModel;
         _vm = viewModel;
 
-        Loaded += (_, _) =>
-        {
-            VideoView.MediaPlayer = _vm.MediaPlayer;
-            _vm.PropertyChanged += OnVmPropertyChanged;
-            _vm.Entries.CollectionChanged += OnEntriesCollectionChanged;
-            
-            TimelineCanvas.MouseLeftButtonDown -= OnCanvasMouseLeftButtonDown;
-            TimelineCanvas.MouseLeftButtonDown += OnCanvasMouseLeftButtonDown;
-        };
-
         SeekSlider.AddHandler(
             Thumb.DragStartedEvent,
-            new DragStartedEventHandler((_, _) => _isDragging = true));
+            new DragStartedEventHandler(OnSeekSliderDragStarted));
+
+        Loaded   += OnLoaded;
+        Unloaded += OnUnloaded;
     }
 
-    private void OnCanvasMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        var x        = e.GetPosition(TimelineCanvas).X;
-        var width    = TimelineCanvas.ActualWidth;
-        var duration = _vm.DurationMs;
+        VideoView.MediaPlayer = _vm.MediaPlayer;
 
-        if (width <= 0 || duration <= 0) return;
-
-        var ratio  = Math.Clamp(x / width, 0.0, 1.0);
-        var timeMs = (long)(ratio * duration);
-        _vm.SeekCommand.Execute(timeMs);
-
-        e.Handled = true;
+        Unsubscribe();
+        Subscribe();
     }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        Unsubscribe();
+    }
+
+    private void Subscribe()
+    {
+        _vm.PropertyChanged                += OnVmPropertyChanged;
+        _vm.Entries.CollectionChanged      += OnEntriesCollectionChanged;
+        TimelineCanvas.MouseLeftButtonDown += OnCanvasMouseLeftButtonDown;
+    }
+
+    private void Unsubscribe()
+    {
+        _vm.PropertyChanged                -= OnVmPropertyChanged;
+        _vm.Entries.CollectionChanged      -= OnEntriesCollectionChanged;
+        TimelineCanvas.MouseLeftButtonDown -= OnCanvasMouseLeftButtonDown;
+    }
+
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -76,13 +82,42 @@ public partial class PlayerView : UserControl
     private void OnEntriesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         => RefreshMarkers();
 
+    private void OnSeekSliderDragStarted(object sender, DragStartedEventArgs e)
+        => _isDragging = true;
+
+    private void SeekSlider_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        _isDragging = false;
+        _vm.SeekCommand.Execute((long)SeekSlider.Value);
+    }
+
+    private void SeekSlider_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_isDragging)
+            _vm.SeekCommand.Execute((long)SeekSlider.Value);
+    }
+
+    private void OnCanvasMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var x        = e.GetPosition(TimelineCanvas).X;
+        var width    = TimelineCanvas.ActualWidth;
+        var duration = _vm.DurationMs;
+
+        if (width <= 0 || duration <= 0) return;
+
+        var ratio  = Math.Clamp(x / width, 0.0, 1.0);
+        var timeMs = (long)(ratio * duration);
+        _vm.SeekCommand.Execute(timeMs);
+
+        e.Handled = true;
+    }
+
     private void TimelineCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
         => RefreshMarkers();
 
     private void RefreshMarkers()
     {
         TimelineCanvas.Children.Clear();
-
         TimelineCanvas.Children.Add(Playhead);
 
         var width    = TimelineCanvas.ActualWidth;
@@ -157,6 +192,13 @@ public partial class PlayerView : UserControl
         }
     }
 
+    private void UpdatePlayhead()
+    {
+        var duration = _vm.DurationMs;
+        if (duration <= 0) return;
+        PlayheadTranslate.X = (double)_vm.PositionMs / duration * TimelineCanvas.ActualWidth;
+    }
+
     private static ToolTip BuildTooltip(LogEntry entry)
     {
         var sp = new StackPanel();
@@ -181,24 +223,5 @@ public partial class PlayerView : UserControl
             Opacity  = 0.6,
         });
         return new ToolTip { Content = sp };
-    }
-
-    private void UpdatePlayhead()
-    {
-        var duration = _vm.DurationMs;
-        if (duration <= 0) return;
-        PlayheadTranslate.X = (double)_vm.PositionMs / duration * TimelineCanvas.ActualWidth;
-    }
-
-    private void SeekSlider_DragCompleted(object sender, DragCompletedEventArgs e)
-    {
-        _isDragging = false;
-        _vm.SeekCommand.Execute((long)SeekSlider.Value);
-    }
-
-    private void SeekSlider_MouseUp(object sender, MouseButtonEventArgs e)
-    {
-        if (!_isDragging)
-            _vm.SeekCommand.Execute((long)SeekSlider.Value);
     }
 }

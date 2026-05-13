@@ -12,6 +12,18 @@ namespace Diploma.Views;
 public partial class ScreenshotAnnotationWindow : Window
 {
     private enum Tool { Arrow, Rect, Pen, Text, Highlight }
+    
+    private readonly Stack<UndoEntry> _undoStack = new();
+    
+    private readonly record struct UndoEntry
+    {
+        public Stroke?    Stroke  { get; init; }
+        public UIElement? Element { get; init; }
+
+        public static UndoEntry ForStroke (Stroke    s) => new() { Stroke  = s };
+        public static UndoEntry ForElement(UIElement e) => new() { Element = e };
+    }
+    
     private Tool   _activeTool  = Tool.Arrow;
     private Color  _activeColor = Colors.Red;
     private double _thickness   = 2.0;
@@ -48,6 +60,14 @@ public partial class ScreenshotAnnotationWindow : Window
             Height    = _thickness,
             FitToCurve = true,
         };
+        
+        DrawingCanvas.Strokes.StrokesChanged += OnStrokesChanged;
+    }
+    
+    private void OnStrokesChanged(object? sender, StrokeCollectionChangedEventArgs e)
+    {
+        foreach (var stroke in e.Added)
+            _undoStack.Push(UndoEntry.ForStroke(stroke));
     }
 
     private void Tool_Click(object sender, RoutedEventArgs e)
@@ -116,20 +136,30 @@ public partial class ScreenshotAnnotationWindow : Window
 
     private void DrawingCanvas_MouseMove(object sender, MouseEventArgs e)
     {
-        if (!_isDragging || _previewShape is null) return;
+        if (!_isDragging || _previewShape is null)
+            return;
 
-        var cur = e.GetPosition(DrawingCanvas);
-        UpdateShape(_previewShape, _activeTool, _dragStart, cur);
+        UpdateShape(_previewShape, _activeTool, _dragStart, e.GetPosition(DrawingCanvas));
     }
 
     private void DrawingCanvas_MouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_isDragging) return;
-        _isDragging   = false;
-        _previewShape = null;
+        if (!_isDragging) 
+            return;
+        
+        _isDragging = false;
         DrawingCanvas.ReleaseMouseCapture();
-    }
 
+        if (_previewShape is not null && IsShapeVisible(_previewShape))
+            _undoStack.Push(UndoEntry.ForElement(_previewShape));
+
+        _previewShape = null;
+    }
+    
+    private static bool IsShapeVisible(Shape shape)
+        => shape.Width > 2 || shape.Height > 2 ||
+           (shape is Polyline pl && pl.Points.Count >= 2);
+    
     private Shape? CreateShape(Tool tool, Point from, Point to) => tool switch
     {
         Tool.Rect => new Rectangle
@@ -150,10 +180,8 @@ public partial class ScreenshotAnnotationWindow : Window
 
     private static void UpdateShape(Shape shape, Tool tool, Point from, Point to)
     {
-        var x      = Math.Min(from.X, to.X);
-        var y      = Math.Min(from.Y, to.Y);
-        var width  = Math.Abs(to.X - from.X);
-        var height = Math.Abs(to.Y - from.Y);
+        var x = Math.Min(from.X, to.X);
+        var y = Math.Min(from.Y, to.Y);
 
         switch (tool)
         {
@@ -161,8 +189,8 @@ public partial class ScreenshotAnnotationWindow : Window
             case Tool.Highlight:
                 InkCanvas.SetLeft(shape, x);
                 InkCanvas.SetTop(shape, y);
-                shape.Width  = width;
-                shape.Height = height;
+                shape.Width  = Math.Abs(to.X - from.X);
+                shape.Height = Math.Abs(to.Y - from.Y);
                 break;
 
             case Tool.Arrow:
@@ -176,11 +204,11 @@ public partial class ScreenshotAnnotationWindow : Window
     {
         var pl = new Polyline
         {
-            Stroke          = new SolidColorBrush(_activeColor),
-            StrokeThickness = _thickness,
+            Stroke             = new SolidColorBrush(_activeColor),
+            StrokeThickness    = _thickness,
             StrokeEndLineCap   = PenLineCap.Round,
             StrokeStartLineCap = PenLineCap.Round,
-            StrokeLineJoin  = PenLineJoin.Round,
+            StrokeLineJoin     = PenLineJoin.Round,
         };
         RebuildArrow(pl, from, to);
         return pl;
@@ -190,7 +218,8 @@ public partial class ScreenshotAnnotationWindow : Window
     {
         var dir    = to - from;
         var len    = dir.Length;
-        if (len < 1) return;
+        if (len < 1) 
+            return;
 
         dir.Normalize();
 
@@ -202,10 +231,7 @@ public partial class ScreenshotAnnotationWindow : Window
         var right = new Vector( Math.Cos(-headAngle) * (-dir.X) - Math.Sin(-headAngle) * (-dir.Y),
                                 Math.Sin(-headAngle) * (-dir.X) + Math.Cos(-headAngle) * (-dir.Y));
 
-        var tip1 = to + left  * headLen;
-        var tip2 = to + right * headLen;
-
-        pl.Points = new PointCollection { from, to, tip1, to, tip2 };
+        pl.Points = new PointCollection { from, to, to + left * headLen, to, to + right * headLen };
     }
 
     private void PlaceTextBox(Point pos)
@@ -229,6 +255,8 @@ public partial class ScreenshotAnnotationWindow : Window
         {
             if (string.IsNullOrWhiteSpace(tb.Text))
                 DrawingCanvas.Children.Remove(tb);
+            else
+                _undoStack.Push(UndoEntry.ForElement(tb));
         };
 
         tb.KeyDown += (_, e) =>
@@ -244,13 +272,26 @@ public partial class ScreenshotAnnotationWindow : Window
 
     private void UndoLast()
     {
-        if (DrawingCanvas.Strokes.Count > 0)
+        while (_undoStack.TryPop(out var entry))
         {
-            DrawingCanvas.Strokes.RemoveAt(DrawingCanvas.Strokes.Count - 1);
-            return;
+            if (entry.Stroke is { } stroke)
+            {
+                if (!DrawingCanvas.Strokes.Contains(stroke)) continue;
+
+                DrawingCanvas.Strokes.StrokesChanged -= OnStrokesChanged;
+                DrawingCanvas.Strokes.Remove(stroke);
+                DrawingCanvas.Strokes.StrokesChanged += OnStrokesChanged;
+                return;
+            }
+
+            if (entry.Element is { } element)
+            {
+                if (!DrawingCanvas.Children.Contains(element)) continue;
+
+                DrawingCanvas.Children.Remove(element);
+                return;
+            }
         }
-        if (DrawingCanvas.Children.Count > 0)
-            DrawingCanvas.Children.RemoveAt(DrawingCanvas.Children.Count - 1);
     }
     
     private void Save_Click(object sender, RoutedEventArgs e) => SaveAndClose();
@@ -278,14 +319,21 @@ public partial class ScreenshotAnnotationWindow : Window
         DialogResult = true;
         Close();
     }
+    
+    protected override void OnClosed(EventArgs e)
+    {
+        base.OnClosed(e);
+        DrawingCanvas.Strokes.StrokesChanged -= OnStrokesChanged;
+        _undoStack.Clear();
+    }
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
+        if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control) 
             SaveAndClose();
-        else if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control)
+        else if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control) 
             UndoLast();
-        else if (e.Key == Key.Escape)
+        else if (e.Key == Key.Escape) 
             Close();
     }
 
