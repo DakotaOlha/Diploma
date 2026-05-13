@@ -196,7 +196,7 @@ public class LogService : ILogService, IAsyncDisposable
 
         try
         {
-            const int MaxBatch = 1000;
+            const int MaxBatch = 150;
             var batch = new List<PendingEvent>(MaxBatch);
 
             while (batch.Count < MaxBatch && _pending.TryDequeue(out var ev))
