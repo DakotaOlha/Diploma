@@ -122,7 +122,9 @@ public class LogService : ILogService, IAsyncDisposable
     public Task LogEventAsync(
         int sessionId, string eventType, string description, string? metadata = null)
     {
-        var now = DateTime.UtcNow;
+        if (_disposed) return Task.CompletedTask;
+
+        var now    = DateTime.UtcNow;
         var offset = _sessionStarts.TryGetValue(sessionId, out var start)
             ? (now - start).TotalSeconds
             : 0.0;
@@ -190,6 +192,7 @@ public class LogService : ILogService, IAsyncDisposable
 
     private async Task FlushAsync()
     {
+        if (_disposed && _pending.IsEmpty) return;
         if (_pending.IsEmpty) return;
 
         if (!await _flushGate.WaitAsync(0)) return;
@@ -230,13 +233,15 @@ public class LogService : ILogService, IAsyncDisposable
 
             Log.Debug("LogService: flushed {Count} events to DB", batch.Count);
         }
+        catch (ObjectDisposedException) { }
         catch (Exception ex)
         {
             Log.Error(ex, "LogService: FlushAsync failed");
         }
         finally
         {
-            _flushGate.Release();
+            if (!_disposed)
+                _flushGate.Release();
         }
     }
 
@@ -274,7 +279,7 @@ public class LogService : ILogService, IAsyncDisposable
         if (_disposed) return;
         _disposed = true;
 
-        _flushTimer.Dispose();
+        await _flushTimer.DisposeAsync();
         await FlushAsync();
         _flushGate.Dispose();
     }
