@@ -234,46 +234,41 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
             ref _state,
             (int)CaptureState.Stopping,
             (int)CaptureState.Recording);
- 
+
         if (prev == CaptureState.Idle || prev == CaptureState.Stopping)
             return;
- 
+
         if (prev == CaptureState.Prepared)
-        {
             Interlocked.Exchange(ref _state, (int)CaptureState.Stopping);
-        }
- 
+
         Log("Stop requested…");
- 
+
         _stopRequested?.TrySetResult(true);
- 
+
+        _cts?.Cancel();
+
         if (_encodeTask is not null)
         {
             var finished = await Task.WhenAny(_encodeTask, Task.Delay(30_000))
                 .ConfigureAwait(false);
- 
+
             if (finished != _encodeTask)
-            {
-                Log("StopAsync: encode did not finish in 30 s — forcing cancel.");
-                _cts?.Cancel();
-            }
+                Log("StopAsync: encode did not finish in 30 s — file may be incomplete.");
         }
-        
-        _cts?.Cancel();
- 
+
         if (_captureTask is not null)
         {
             try   { await _captureTask.ConfigureAwait(false); }
-            catch (OperationCanceledException) { /* expected */ }
+            catch (OperationCanceledException) { }
             catch (Exception ex) { Log($"CaptureTask error on stop: {ex.Message}"); }
         }
- 
+
         ResetD3DState();
         CleanupPrepareContext();
- 
+
         _cts?.Dispose();
         _cts = null;
- 
+
         Interlocked.Exchange(ref _state, (int)CaptureState.Idle);
         Log("Recording stopped — service returned to Idle.");
     }
@@ -366,7 +361,11 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
             Log("First frame received — firing RecordingStarted, starting encode…");
             RecordingStarted?.Invoke(this, EventArgs.Empty);
  
-            _encodeTask = Task.Run(() => EncodeLoopAsync(outputPath, width, height));
+            _encodeTask = Task.Factory.StartNew(
+                () => EncodeLoopAsync(outputPath, width, height, token),
+                CancellationToken.None,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default).Unwrap();
  
             try
             {
@@ -396,7 +395,7 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
         }
     }
 
-    private async Task EncodeLoopAsync(string outputPath, int width, int height)
+    private async Task EncodeLoopAsync(string outputPath, int width, int height, CancellationToken ct)
     {
         var windowStart      = Environment.TickCount64;
         int currentFrameRate = _targetFrameRate;
@@ -509,7 +508,7 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                 {
                     opts.WithVideoCodec(videoEncoder)
                         .WithCustomArgument("-pix_fmt yuv420p");
- 
+
                     switch (videoEncoder)
                     {
                         case "libx264":
@@ -532,7 +531,8 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                             break;
                     }
                 })
-                .ProcessAsynchronously();
+                .CancellableThrough(ct)
+                .ProcessAsynchronously(throwOnError: false);
  
             var success = await encodeTask;
  
