@@ -79,7 +79,7 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     private ID3D11DeviceContext? _d3dContext;
     private ID3D11Texture2D?     _stagingTexture;
     private (int W, int H)       _stagingSize;
-    private readonly object      _stagingLock = new();
+    private readonly object      _d3dLock     = new();
 
     private long _droppedFramesTotal;
     private long _droppedFramesWindow;
@@ -611,19 +611,19 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
 
     private byte[]? ConvertFrameToBytes(Direct3D11CaptureFrame frame, int width, int height)
     {
-        if (_d3dDevice is null || _d3dContext is null) return null;
- 
-        try
+        lock (_d3dLock)
         {
-            var access     = frame.Surface.As<IDirect3DDxgiInterfaceAccess>();
-            var texturePtr = access.GetInterface(typeof(ID3D11Texture2D).GUID);
-            if (texturePtr == IntPtr.Zero) return null;
- 
-            using var texture = new ID3D11Texture2D(texturePtr);
-            var desc = texture.Description;
- 
-            lock (_stagingLock)
+            if (_d3dDevice is null || _d3dContext is null) return null;
+
+            try
             {
+                var access     = frame.Surface.As<IDirect3DDxgiInterfaceAccess>();
+                var texturePtr = access.GetInterface(typeof(ID3D11Texture2D).GUID);
+                if (texturePtr == IntPtr.Zero) return null;
+
+                using var texture = new ID3D11Texture2D(texturePtr);
+                var desc = texture.Description;
+
                 if (_stagingTexture is null || _stagingSize != (desc.Width, desc.Height))
                 {
                     _stagingTexture?.Dispose();
@@ -642,9 +642,9 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                     _stagingSize = ((int)desc.Width, (int)desc.Height);
                     Log($"StagingTexture (re)created: {desc.Width}×{desc.Height}");
                 }
- 
+
                 _d3dContext.CopyResource(_stagingTexture, texture);
- 
+
                 var mapped = _d3dContext.Map(_stagingTexture, 0, MapMode.Read, MapFlags.None);
                 try
                 {
@@ -658,23 +658,23 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                                 .CopyTo(new Span<byte>(data, y * width * 4, width * 4));
                         }
                     }
- 
+
                     var nowMs = Environment.TickCount64;
                     if (nowMs - _lastSnapshotTickMs >= SnapshotIntervalMs)
                     {
                         var snapshot = new byte[width * height * 4];
                         Buffer.BlockCopy(data, 0, snapshot, 0, snapshot.Length);
- 
+
                         lock (_snapshotLock)
                         {
                             _latestFrame       = snapshot;
                             _latestFrameWidth  = width;
                             _latestFrameHeight = height;
                         }
- 
+
                         _lastSnapshotTickMs = nowMs;
                     }
- 
+
                     return data;
                 }
                 finally
@@ -682,28 +682,28 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
                     _d3dContext.Unmap(_stagingTexture, 0);
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            Log($"Frame conversion error: {ex.GetType().Name}: {ex.Message}");
-            return null;
+            catch (Exception ex)
+            {
+                Log($"Frame conversion error: {ex.GetType().Name}: {ex.Message}");
+                return null;
+            }
         }
     }
 
     private void ResetD3DState()
     {
-        lock (_stagingLock)
+        lock (_d3dLock)
         {
             _stagingTexture?.Dispose();
             _stagingTexture = null;
             _stagingSize    = default;
+
+            _d3dContext?.Dispose();
+            _d3dContext = null;
+
+            _d3dDevice?.Dispose();
+            _d3dDevice = null;
         }
-
-        _d3dContext?.Dispose();
-        _d3dContext = null;
-
-        _d3dDevice?.Dispose();
-        _d3dDevice = null;
     }
 
     private void Log(string message)

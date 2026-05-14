@@ -276,16 +276,18 @@ public partial class MainViewModel : ObservableObject
             IsBusy     = true;
             StatusText = "Зупинка та збереження...";
 
-            var sessionId  = _currentSessionId;
-            var videoPath  = _currentVideoPath;
-            var audioPath  = _currentAudioPath;
+            var sessionId = _currentSessionId;
+            var videoPath = _currentVideoPath;
+            var audioPath = _currentAudioPath;
+
+            _inputMonitor.Stop();
 
             await _captureService.StopAsync();
+
             if (_audioCaptureService.IsRecording)
                 await _audioCaptureService.StopAsync();
 
             await _logService.EndSessionAsync(sessionId);
-            _inputMonitor.Stop();
 
             IsRecording = false;
             ResetDurationCounter();
