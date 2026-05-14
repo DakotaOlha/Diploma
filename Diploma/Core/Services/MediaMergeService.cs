@@ -19,7 +19,10 @@ public class MediaMergeService
         {
             Log.Information("MediaMerge: starting merge → {Output}", outputPath);
 
-            var mergeTask = FFMpegArguments
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(MergeTimeoutMs);
+            
+            var success = await FFMpegArguments
                 .FromFileInput(videoPath, verifyExists: true)
                 .AddFileInput(audioPath, verifyExists: true)
                 .OutputToFile(outputPath, overwrite: true, opts => opts
@@ -29,34 +32,51 @@ public class MediaMergeService
                     .WithAudioCodec("aac")
                     .WithAudioBitrate(192)
                     .WithCustomArgument("-shortest"))
-                .ProcessAsynchronously();
-
-            var completed = await Task.WhenAny(mergeTask, Task.Delay(MergeTimeoutMs, ct));
-
-            if (completed != mergeTask)
-            {
-                Log.Warning("MediaMerge: timeout after {Ms}ms", MergeTimeoutMs);
-                return false;
-            }
-
-            var success = await mergeTask;
+                .CancellableThrough(timeoutCts.Token)
+                .ProcessAsynchronously(throwOnError: false);
 
             if (success)
+            {
                 Log.Information("MediaMerge: done → {Output}", outputPath);
+            }
             else
+            {
                 Log.Warning("MediaMerge: FFmpeg returned failure");
+                TryDeleteFile(outputPath);
+            }
 
             return success;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            Log.Warning("MediaMerge: cancelled by caller");
+            TryDeleteFile(outputPath);
+            return false;
+        }
         catch (OperationCanceledException)
         {
-            Log.Warning("MediaMerge: cancelled");
+            Log.Warning("MediaMerge: timeout after {Ms}ms", MergeTimeoutMs);
+            TryDeleteFile(outputPath);
             return false;
         }
         catch (Exception ex)
         {
             Log.Error(ex, "MediaMerge: unexpected error");
+            TryDeleteFile(outputPath);
             return false;
+        }
+    }
+    
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "MediaMerge: failed to delete partial file {Path}", path);
         }
     }
 

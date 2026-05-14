@@ -47,6 +47,8 @@ public partial class MainViewModel : ObservableObject
     private string _currentVideoPath  = string.Empty;
     private string _currentSessionDir = string.Empty;
     
+    private DateTime _recordingStartedAt;
+    
     private System.Windows.Threading.DispatcherTimer? _durationTimer;
 
     public MainViewModel(
@@ -107,6 +109,7 @@ public partial class MainViewModel : ObservableObject
         _captureService.RecordingStarted += async (_, _) =>
         {
             var realStart = DateTime.UtcNow;
+            _recordingStartedAt = realStart;
             _logService.AdjustSessionStart(_currentSessionId, realStart);
             
             _inputMonitor.SetMode(SelectedMode?.Mode ?? RecordingMode.Personal);
@@ -317,7 +320,7 @@ public partial class MainViewModel : ObservableObject
     }
     
     private void OnDurationTimerTick(object? sender, EventArgs e)
-        => RecordingDuration = RecordingDuration.Add(TimeSpan.FromSeconds(1));
+        => RecordingDuration = DateTime.UtcNow - _recordingStartedAt;
     
     private void ResetDurationCounter()
     {
@@ -328,7 +331,8 @@ public partial class MainViewModel : ObservableObject
             _durationTimer = null;
         }
 
-        RecordingDuration = TimeSpan.Zero;
+        _recordingStartedAt = default;
+        RecordingDuration   = TimeSpan.Zero;
     }
     
     private async Task ProcessMergeAsync(string videoPath, string audioPath, int sessionId)
