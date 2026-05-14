@@ -11,7 +11,16 @@ namespace Diploma.Views;
 
 public partial class ScreenshotAnnotationWindow : Window
 {
-    private enum Tool { Arrow, Rect, Pen, Text, Highlight, Eraser }
+    private enum Tool
+    {
+        Select,     // виділення / переміщення / редагування елементів  [S]
+        Arrow,      // малювання стрілки на canvas                      [A]
+        Rect,       // прямокутник                                      [R]
+        Pen,        // вільний олівець (InkCanvas Ink mode)             [P]
+        Text,       // розміщення текстового блоку                      [T]
+        Highlight,  // маркер (напівпрозорий прямокутник)               [M]
+        Eraser,     // гумка (InkCanvas EraseByPoint mode)              [E]
+    }
 
     private readonly record struct UndoEntry
     {
@@ -24,7 +33,7 @@ public partial class ScreenshotAnnotationWindow : Window
 
     private readonly Stack<UndoEntry> _undoStack = new();
 
-    private Tool   _activeTool  = Tool.Arrow;
+    private Tool   _activeTool  = Tool.Select;
     private Color  _activeColor = Colors.Red;
     private double _thickness   = 2.0;
 
@@ -36,10 +45,14 @@ public partial class ScreenshotAnnotationWindow : Window
 
     private UIElement? _selectedElement;
     private Border?    _selectionBorder;
-    private bool       _isMoving;
-    private Point      _moveOrigin;
-    private double     _moveStartLeft; 
-    private double     _moveStartTop;
+
+    private bool   _isMoving;
+    private Point  _moveOrigin;
+    private double _moveStartLeft;
+    private double _moveStartTop;
+
+    private const double DragThreshold = 5.0;
+    private bool _moveBeyondThreshold;
 
     private readonly string _outputPath;
 
@@ -72,7 +85,7 @@ public partial class ScreenshotAnnotationWindow : Window
 
         DrawingCanvas.Strokes.StrokesChanged += OnStrokesChanged;
     }
-    
+
     private void OnStrokesChanged(object? sender, StrokeCollectionChangedEventArgs e)
     {
         foreach (var stroke in e.Added)
@@ -114,13 +127,14 @@ public partial class ScreenshotAnnotationWindow : Window
 
         var tool = btn.Tag switch
         {
+            "Select"    => Tool.Select,
             "Arrow"     => Tool.Arrow,
             "Rect"      => Tool.Rect,
             "Pen"       => Tool.Pen,
             "Text"      => Tool.Text,
             "Highlight" => Tool.Highlight,
             "Eraser"    => Tool.Eraser,
-            _           => Tool.Arrow
+            _           => Tool.Select
         };
 
         SelectTool(tool);
@@ -128,23 +142,27 @@ public partial class ScreenshotAnnotationWindow : Window
 
     private void SelectTool(Tool tool)
     {
-        if (_activeTool == Tool.Arrow && tool != Tool.Arrow)
+        if (_activeTool == Tool.Select && tool != Tool.Select)
             ClearSelection();
+
+        if (_activeTextBox is not null)
+            CommitActiveTextBox();
 
         _activeTool = tool;
 
-        foreach (var b in new[] { BtnArrow, BtnRect, BtnPen, BtnText, BtnHighlight, BtnEraser })
+        foreach (var b in new[] { BtnSelect, BtnArrow, BtnRect, BtnPen, BtnText, BtnHighlight, BtnEraser })
             b.Style = (Style)Resources["ToolBtn"];
 
         var activeBtn = tool switch
         {
+            Tool.Select    => BtnSelect,
             Tool.Arrow     => BtnArrow,
             Tool.Rect      => BtnRect,
             Tool.Pen       => BtnPen,
             Tool.Text      => BtnText,
             Tool.Highlight => BtnHighlight,
             Tool.Eraser    => BtnEraser,
-            _              => BtnArrow
+            _              => BtnSelect
         };
         activeBtn.Style = (Style)Resources["ToolBtnActive"];
 
@@ -154,8 +172,15 @@ public partial class ScreenshotAnnotationWindow : Window
             Tool.Eraser => InkCanvasEditingMode.EraseByPoint,
             _           => InkCanvasEditingMode.None
         };
+
+        DrawingCanvas.Cursor = tool switch
+        {
+            Tool.Select => Cursors.Arrow,
+            Tool.Text   => Cursors.IBeam,
+            _           => Cursors.Cross,
+        };
     }
-    
+
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
         if (Keyboard.FocusedElement is TextBox)
@@ -175,42 +200,36 @@ public partial class ScreenshotAnnotationWindow : Window
 
         switch (e.Key)
         {
-            case Key.V:                                                 SelectTool(Tool.Arrow);     e.Handled = true; break;
-            case Key.P:                                                 SelectTool(Tool.Pen);       e.Handled = true; break;
-            case Key.M:                                                 SelectTool(Tool.Highlight); e.Handled = true; break;
-            case Key.T:                                                 SelectTool(Tool.Text);      e.Handled = true; break;
-            case Key.R:                                                 SelectTool(Tool.Rect);      e.Handled = true; break;
-            case Key.E:                                                 SelectTool(Tool.Eraser);    e.Handled = true; break;
+            case Key.S when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Select);    e.Handled = true; break;
+            case Key.A when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Arrow);     e.Handled = true; break;
+            case Key.P when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Pen);       e.Handled = true; break;
+            case Key.M when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Highlight); e.Handled = true; break;
+            case Key.T when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Text);      e.Handled = true; break;
+            case Key.R when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Rect);      e.Handled = true; break;
+            case Key.E when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Eraser);    e.Handled = true; break;
             case Key.Escape:                                            ClearSelection();            e.Handled = true; break;
             case Key.Delete:                                            DeleteSelected();            e.Handled = true; break;
-            case Key.Z when Keyboard.Modifiers == ModifierKeys.Control: UndoLast();                 e.Handled = true; break;
-            case Key.S when Keyboard.Modifiers == ModifierKeys.Control: SaveAndClose();             e.Handled = true; break;
+            case Key.Z when Keyboard.Modifiers == ModifierKeys.Control: UndoLast();                  e.Handled = true; break;
+            case Key.S when Keyboard.Modifiers == ModifierKeys.Control: SaveAndClose();              e.Handled = true; break;
         }
     }
-    
+
     private void DrawingCanvas_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (Keyboard.Modifiers != ModifierKeys.Control)
-            return;
+        if (Keyboard.Modifiers != ModifierKeys.Control) return;
 
-        var delta = e.Delta > 0 ? 1.0 : -1.0;
+        var delta        = e.Delta > 0 ? 1.0 : -1.0;
         var newThickness = Math.Clamp(_thickness + delta, 1.0, 20.0);
 
-        if (Math.Abs(newThickness - _thickness) < 0.01)
-        {
-            e.Handled = true;
-            return;
-        }
+        if (Math.Abs(newThickness - _thickness) < 0.01) { e.Handled = true; return; }
 
-        _thickness = newThickness;
-
+        _thickness            = newThickness;
         ThicknessSlider.Value = _thickness;
-
         ApplyThickness();
 
         e.Handled = true;
     }
-
+    
     private void Color_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: Color c })
@@ -235,52 +254,68 @@ public partial class ScreenshotAnnotationWindow : Window
 
     private void DrawingCanvas_MouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (_activeTool is Tool.Pen or Tool.Eraser)
-            return;
+        if (_activeTool is Tool.Pen or Tool.Eraser) return;
 
         var pos = e.GetPosition(DrawingCanvas);
 
-        if (_activeTool == Tool.Arrow)
+        switch (_activeTool)
         {
-            Arrow_MouseDown(e, pos);
-            return;
+            case Tool.Select:
+                Select_MouseDown(e, pos, sourceElement: null);
+                return;
+
+            case Tool.Text:
+                Text_MouseDown(pos);
+                return;
+
+            default:
+                Drawing_MouseDown(pos);
+                return;
         }
-
-        if (_activeTool == Tool.Text)
-        {
-            PlaceTextBox(pos);
-            return;
-        }
-
-        _dragStart  = pos;
-        _isDragging = true;
-        DrawingCanvas.CaptureMouse();
-
-        _previewShape = CreateShape(_activeTool, _dragStart, _dragStart);
-        if (_previewShape is not null)
-            DrawingCanvas.Children.Add(_previewShape);
     }
 
     private void DrawingCanvas_MouseMove(object sender, MouseEventArgs e)
     {
-        if (_activeTool == Tool.Arrow)
+        switch (_activeTool)
         {
-            Arrow_MouseMove(e);
-            return;
-        }
+            case Tool.Select:
+                Select_MouseMove(e.GetPosition(DrawingCanvas));
+                return;
 
-        if (!_isDragging || _previewShape is null) return;
-        UpdateShape(_previewShape, _activeTool, _dragStart, e.GetPosition(DrawingCanvas));
+            default:
+                if (!_isDragging || _previewShape is null) return;
+                UpdateShape(_previewShape, _activeTool, _dragStart, e.GetPosition(DrawingCanvas));
+                return;
+        }
     }
 
     private void DrawingCanvas_MouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (_activeTool == Tool.Arrow)
+        switch (_activeTool)
         {
-            Arrow_MouseUp(e);
-            return;
-        }
+            case Tool.Select:
+                Select_MouseUp(e);
+                return;
 
+            default:
+                Drawing_MouseUp();
+                return;
+        }
+    }
+
+    private void Drawing_MouseDown(Point pos)
+    {
+        _dragStart  = pos;
+        _isDragging = true;
+        DrawingCanvas.CaptureMouse();
+
+        _previewShape = CreateShape(_activeTool, pos, pos);
+        if (_previewShape is not null)
+            DrawingCanvas.Children.Add(_previewShape);
+    }
+
+    private void Drawing_MouseUp()
+    {
         if (!_isDragging) return;
 
         _isDragging = false;
@@ -292,42 +327,63 @@ public partial class ScreenshotAnnotationWindow : Window
         _previewShape = null;
     }
 
-    private void Arrow_MouseDown(MouseButtonEventArgs e, Point pos)
+    private void Text_MouseDown(Point pos)
     {
         var hit = FindHitElement(pos);
+        if (hit is TextBox existingTb)
+        {
+            ActivateTextBox(existingTb);
+            return;
+        }
 
-        if (hit is null)
+        var tb = BuildTextBox();
+        InkCanvas.SetLeft(tb, pos.X);
+        InkCanvas.SetTop (tb, pos.Y);
+        DrawingCanvas.Children.Add(tb);
+        ActivateTextBox(tb);
+    }
+
+    private void Select_MouseDown(MouseButtonEventArgs e, Point pos, UIElement? sourceElement)
+    {
+        if (_activeTextBox is not null && sourceElement != _activeTextBox)
+            CommitActiveTextBox();
+
+        var target = sourceElement ?? FindHitElement(pos);
+
+        if (target is null)
         {
             ClearSelection();
             return;
         }
 
-        if (e.ClickCount == 2 && hit is TextBox tb)
-        {
-            EnterTextEditMode(tb);
-            return;
-        }
-
-        SetSelection(hit);
-
-        _isMoving      = true;
-        _moveOrigin    = pos;
-        _moveStartLeft = InkCanvas.GetLeft(hit);
-        _moveStartTop  = InkCanvas.GetTop(hit);
+        _isMoving            = true;
+        _moveBeyondThreshold = false;
+        _moveOrigin          = pos;
+        _moveStartLeft       = InkCanvas.GetLeft(target);
+        _moveStartTop        = InkCanvas.GetTop(target);
 
         if (double.IsNaN(_moveStartLeft)) _moveStartLeft = 0;
         if (double.IsNaN(_moveStartTop))  _moveStartTop  = 0;
 
+        SetSelection(target);
+
+        DrawingCanvas.Cursor = Cursors.SizeAll;
         DrawingCanvas.CaptureMouse();
+
         e.Handled = true;
     }
 
-    private void Arrow_MouseMove(MouseEventArgs e)
+    private void Select_MouseMove(Point pos)
     {
         if (!_isMoving || _selectedElement is null) return;
 
-        var pos   = e.GetPosition(DrawingCanvas);
         var delta = pos - _moveOrigin;
+
+        if (!_moveBeyondThreshold)
+        {
+            if (delta.Length < DragThreshold) return;
+            _moveBeyondThreshold = true;
+        }
 
         InkCanvas.SetLeft(_selectedElement, _moveStartLeft + delta.X);
         InkCanvas.SetTop (_selectedElement, _moveStartTop  + delta.Y);
@@ -335,12 +391,59 @@ public partial class ScreenshotAnnotationWindow : Window
         UpdateSelectionBorderPosition();
     }
 
-    private void Arrow_MouseUp(MouseButtonEventArgs e)
+    private void Select_MouseUp(MouseButtonEventArgs e)
     {
         if (!_isMoving) return;
 
         _isMoving = false;
         DrawingCanvas.ReleaseMouseCapture();
+        DrawingCanvas.Cursor = Cursors.Arrow;
+
+        if (!_moveBeyondThreshold && _selectedElement is not null)
+        {
+            if (e.ClickCount == 2 && _selectedElement is TextBox tb)
+            {
+                ClearSelection();
+                ActivateTextBox(tb);
+            }
+        }
+
+        _moveBeyondThreshold = false;
+    }
+
+    private void AttachSelectHandlers(TextBox tb)
+    {
+        tb.PreviewMouseDown += TextBox_PreviewMouseDown;
+        tb.PreviewMouseMove += TextBox_PreviewMouseMove;
+        tb.PreviewMouseUp   += TextBox_PreviewMouseUp;
+    }
+
+    private void TextBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_activeTool != Tool.Select) return;
+
+        var tb  = (TextBox)sender;
+        var pos = e.GetPosition(DrawingCanvas);
+
+        Select_MouseDown(e, pos, sourceElement: tb);
+    }
+
+    private void TextBox_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_activeTool != Tool.Select) return;
+        if (!_isMoving) return;
+
+        Select_MouseMove(e.GetPosition(DrawingCanvas));
+        e.Handled = true;
+    }
+
+    private void TextBox_PreviewMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_activeTool != Tool.Select) return;
+        if (!_isMoving) return;
+
+        Select_MouseUp(e);
+        e.Handled = true;
     }
 
     private UIElement? FindHitElement(Point pos)
@@ -352,11 +455,10 @@ public partial class ScreenshotAnnotationWindow : Window
             null,
             result =>
             {
-                if (result.VisualHit is UIElement el
-                    && DrawingCanvas.Children.Contains(el)
-                    && el != _selectionBorder)
+                var candidate = FindDirectChild(DrawingCanvas, result.VisualHit);
+                if (candidate is not null && candidate != _selectionBorder)
                 {
-                    found = el;
+                    found = candidate;
                     return HitTestResultBehavior.Stop;
                 }
                 return HitTestResultBehavior.Continue;
@@ -364,6 +466,18 @@ public partial class ScreenshotAnnotationWindow : Window
             new PointHitTestParameters(pos));
 
         return found;
+    }
+
+    private static UIElement? FindDirectChild(InkCanvas parent, DependencyObject? child)
+    {
+        var current = child;
+        while (current is not null)
+        {
+            if (current is UIElement el && parent.Children.Contains(el))
+                return el;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
     }
 
     private void SetSelection(UIElement element)
@@ -374,24 +488,25 @@ public partial class ScreenshotAnnotationWindow : Window
 
         var left   = InkCanvas.GetLeft(element);
         var top    = InkCanvas.GetTop(element);
-        var width  = (element as FrameworkElement)?.ActualWidth  ?? 0;
-        var height = (element as FrameworkElement)?.ActualHeight ?? 0;
+        var fe     = element as FrameworkElement;
+        var width  = fe?.ActualWidth  ?? 0;
+        var height = fe?.ActualHeight ?? 0;
 
         if (double.IsNaN(left)) left = 0;
         if (double.IsNaN(top))  top  = 0;
 
         _selectionBorder = new Border
         {
-            Width           = width  + 4,
-            Height          = height + 4,
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0x0A, 0x84, 0xFF)),
-            BorderThickness = new Thickness(1.5),
-            Background      = Brushes.Transparent,
+            Width            = width  + 4,
+            Height           = height + 4,
+            BorderBrush      = new SolidColorBrush(Color.FromRgb(0x0A, 0x84, 0xFF)),
+            BorderThickness  = new Thickness(1.5),
+            Background       = Brushes.Transparent,
             IsHitTestVisible = false,
         };
 
-        InkCanvas.SetLeft(_selectionBorder, left  - 2);
-        InkCanvas.SetTop (_selectionBorder, top   - 2);
+        InkCanvas.SetLeft(_selectionBorder, left - 2);
+        InkCanvas.SetTop (_selectionBorder, top  - 2);
         DrawingCanvas.Children.Add(_selectionBorder);
     }
 
@@ -425,24 +540,7 @@ public partial class ScreenshotAnnotationWindow : Window
 
         var el = _selectedElement;
         ClearSelection();
-
         DrawingCanvas.Children.Remove(el);
-    }
-
-    private void PlaceTextBox(Point pos)
-    {
-        var tb = BuildTextBox();
-        InkCanvas.SetLeft(tb, pos.X);
-        InkCanvas.SetTop (tb, pos.Y);
-        DrawingCanvas.Children.Add(tb);
-
-        ActivateTextBox(tb);
-    }
-
-    private void EnterTextEditMode(TextBox tb)
-    {
-        ClearSelection();
-        ActivateTextBox(tb);
     }
 
     private TextBox BuildTextBox()
@@ -454,26 +552,35 @@ public partial class ScreenshotAnnotationWindow : Window
             TextWrapping    = TextWrapping.Wrap,
 
             Background      = Brushes.Transparent,
-            BorderThickness = new Thickness(0, 0, 0, 1),
+            BorderThickness = new Thickness(0),
             BorderBrush     = new SolidColorBrush(_activeColor),
             Foreground      = new SolidColorBrush(_activeColor),
             CaretBrush      = new SolidColorBrush(_activeColor),
             FontSize        = Math.Max(14, _thickness * 5),
 
             MinWidth        = 80,
-            MaxWidth        = DrawingCanvas.ActualWidth > 0 ? DrawingCanvas.ActualWidth * 0.8 : 400,
+            MaxWidth        = DrawingCanvas.ActualWidth > 0
+                                  ? DrawingCanvas.ActualWidth * 0.8
+                                  : 400,
 
             VerticalScrollBarVisibility   = ScrollBarVisibility.Disabled,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+
+            IsHitTestVisible = true,
         };
 
         tb.TextChanged += (_, _) => tb.Height = double.NaN;
 
+        AttachSelectHandlers(tb);
+
         return tb;
     }
-    
+
     private void ActivateTextBox(TextBox tb)
     {
+        if (_activeTextBox is not null && _activeTextBox != tb)
+            CommitActiveTextBox();
+
         _activeTextBox = tb;
 
         tb.BorderThickness = new Thickness(0, 0, 0, 1);
@@ -532,7 +639,7 @@ public partial class ScreenshotAnnotationWindow : Window
 
         var tb = _activeTextBox;
         _activeTextBox = null;
-        
+
         if (string.IsNullOrWhiteSpace(tb.Text))
             DrawingCanvas.Children.Remove(tb);
         else
@@ -564,15 +671,12 @@ public partial class ScreenshotAnnotationWindow : Window
 
     private static void UpdateShape(Shape shape, Tool tool, Point from, Point to)
     {
-        var x = Math.Min(from.X, to.X);
-        var y = Math.Min(from.Y, to.Y);
-
         switch (tool)
         {
             case Tool.Rect:
             case Tool.Highlight:
-                InkCanvas.SetLeft(shape, x);
-                InkCanvas.SetTop (shape, y);
+                InkCanvas.SetLeft(shape, Math.Min(from.X, to.X));
+                InkCanvas.SetTop (shape, Math.Min(from.Y, to.Y));
                 shape.Width  = Math.Abs(to.X - from.X);
                 shape.Height = Math.Abs(to.Y - from.Y);
                 break;
@@ -654,7 +758,7 @@ public partial class ScreenshotAnnotationWindow : Window
         DrawingCanvas.Strokes.StrokesChanged -= OnStrokesChanged;
         _undoStack.Clear();
     }
-    
+
     private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ButtonState == MouseButtonState.Pressed) DragMove();
