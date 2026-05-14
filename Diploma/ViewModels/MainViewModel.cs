@@ -43,8 +43,9 @@ public partial class MainViewModel : ObservableObject
     private CancellationTokenSource? _startCts;
 
     private int _currentSessionId;
-    private string _currentAudioPath = string.Empty;
-    private string _currentVideoPath = string.Empty;
+    private string _currentAudioPath  = string.Empty;
+    private string _currentVideoPath  = string.Empty;
+    private string _currentSessionDir = string.Empty;
     
     private System.Windows.Threading.DispatcherTimer? _durationTimer;
 
@@ -105,7 +106,12 @@ public partial class MainViewModel : ObservableObject
         
         _captureService.RecordingStarted += async (_, _) =>
         {
-            _logService.AdjustSessionStart(_currentSessionId, DateTime.UtcNow);
+            var realStart = DateTime.UtcNow;
+            _logService.AdjustSessionStart(_currentSessionId, realStart);
+            
+            _inputMonitor.SetMode(SelectedMode?.Mode ?? RecordingMode.Personal);
+            _inputMonitor.Start(_currentSessionId);
+            
             StartDurationTimer();
 
             if (IsMicEnabled && MicDevices.Count > 0)
@@ -177,13 +183,14 @@ public partial class MainViewModel : ObservableObject
             
             _currentVideoPath = videoPath;
             _currentAudioPath = audioPath;
+            _currentSessionDir = sessionDir;
  
             _currentSessionId = await _logService.StartSessionAsync(
                 $"Session {DateTime.Now:dd.MM HH:mm}",
                 SelectedMode?.Mode ?? RecordingMode.Personal,
                 _currentVideoPath);
  
-            _inputMonitor.Start(_currentSessionId);
+            //_inputMonitor.Start(_currentSessionId);
             
             StatusText = "Запуск захоплення...";
  
@@ -191,7 +198,7 @@ public partial class MainViewModel : ObservableObject
  
             if (cts.Token.IsCancellationRequested)
             {
-                await RollbackStartAsync(_currentSessionId);
+                await RollbackStartAsync(_currentSessionId, _currentSessionDir);
                 return;
             }
  
@@ -201,12 +208,12 @@ public partial class MainViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             StatusText = "Запис скасовано.";
-            await RollbackStartAsync(_currentSessionId);
+            await RollbackStartAsync(_currentSessionId, _currentSessionDir);
         }
         catch (Exception ex)
         {
             StatusText = $"Помилка старту: {ex.Message}";
-            await RollbackStartAsync(_currentSessionId);
+            await RollbackStartAsync(_currentSessionId, _currentSessionDir);
         }
         finally
         {
@@ -218,7 +225,7 @@ public partial class MainViewModel : ObservableObject
         }
     }
     
-    private async Task RollbackStartAsync(int sessionId)
+    private async Task RollbackStartAsync(int sessionId, string? sessionDir = null)
     {
         try
         {
@@ -239,12 +246,17 @@ public partial class MainViewModel : ObservableObject
         if (sessionId > 0)
             try
             {
-                await _logService.EndSessionAsync(sessionId);
+                await _logService.DeleteSessionAsync(sessionId);
             } catch { /* best effort */ }
+        
+        if (!string.IsNullOrEmpty(sessionDir) && Directory.Exists(sessionDir))
+            try { Directory.Delete(sessionDir, recursive: true); }
+            catch { }
  
-        _currentSessionId = 0;
-        _currentVideoPath = string.Empty;
-        _currentAudioPath = string.Empty;
+        _currentSessionId  = 0;
+        _currentSessionDir = string.Empty;
+        _currentVideoPath  = string.Empty;
+        _currentAudioPath  = string.Empty;
         ResetDurationCounter();
     }
 
@@ -252,35 +264,32 @@ public partial class MainViewModel : ObservableObject
     private async Task StopRecordingAsync()
     {
         _startCts?.Cancel();
-        
-        
+
         if (!await _recordingLock.WaitAsync(0))
-        {
             return;
-        }
-        
+
         try
         {
-            if (!IsRecording || IsBusy) 
+            if (!IsRecording || IsBusy)
                 return;
-            
-            IsBusy = true;
+
+            IsBusy     = true;
             StatusText = "Зупинка та збереження...";
-            
-            var sessionId = _currentSessionId;
-            var videoPath = _currentVideoPath;
-            var audioPath = _currentAudioPath;
-            
+
+            var sessionId  = _currentSessionId;
+            var videoPath  = _currentVideoPath;
+            var audioPath  = _currentAudioPath;
+
             await _captureService.StopAsync();
             if (_audioCaptureService.IsRecording)
                 await _audioCaptureService.StopAsync();
- 
+
             await _logService.EndSessionAsync(sessionId);
             _inputMonitor.Stop();
- 
+
             IsRecording = false;
             ResetDurationCounter();
- 
+
             await ProcessMergeAsync(videoPath, audioPath, sessionId);
         }
         finally
