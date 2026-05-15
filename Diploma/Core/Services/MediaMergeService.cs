@@ -1,13 +1,12 @@
 ﻿using System.IO;
 using FFMpegCore;
-using FFMpegCore.Enums;
 using Serilog;
 
 namespace Diploma.Core.Services;
 
-public class MediaMergeService
+public sealed class MediaMergeService
 {
-    private const int MergeTimeoutMs = 60_000;
+    private const int MergeTimeoutMs = 90_000;
 
     public async Task<bool> MergeAsync(
         string videoPath,
@@ -17,66 +16,75 @@ public class MediaMergeService
     {
         try
         {
-            Log.Information("MediaMerge: starting merge → {Output}", outputPath);
+            Log.Information("MediaMerge: starting → {Out}", outputPath);
 
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            using var timeoutCts =
+                CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(MergeTimeoutMs);
-            
+
             var success = await FFMpegArguments
                 .FromFileInput(videoPath, verifyExists: true)
                 .AddFileInput(audioPath, verifyExists: true)
                 .OutputToFile(outputPath, overwrite: true, opts => opts
-                    .CopyChannel(Channel.Video)
+                    .WithVideoCodec("libx264")
+                    .WithCustomArgument("-preset ultrafast")
+                    .WithConstantRateFactor(28)
+                    .WithCustomArgument("-pix_fmt yuv420p")
+                    .WithCustomArgument("-vf setpts=PTS-STARTPTS")
                     .WithCustomArgument("-map 0:v:0")
                     .WithCustomArgument("-map 1:a:0")
                     .WithAudioCodec("aac")
                     .WithAudioBitrate(192)
-                    .WithCustomArgument("-shortest"))
+                    .WithCustomArgument("-af apad")
+                    .WithCustomArgument("-video_track_timescale 90000")
+                    .WithCustomArgument("-movflags +faststart"))
                 .CancellableThrough(timeoutCts.Token)
                 .ProcessAsynchronously(throwOnError: false);
 
-            if (success)
+            if (!success)
             {
-                Log.Information("MediaMerge: done → {Output}", outputPath);
-            }
-            else
-            {
-                Log.Warning("MediaMerge: FFmpeg returned failure");
-                TryDeleteFile(outputPath);
+                Log.Warning("MediaMerge: FFmpeg returned non-zero");
+                TryDelete(outputPath);
+                return false;
             }
 
-            return success;
+            var fi = new FileInfo(outputPath);
+            if (!fi.Exists || fi.Length < 65_536)
+            {
+                Log.Warning("MediaMerge: output missing or suspiciously small ({Bytes} bytes)",
+                    fi.Exists ? fi.Length : 0);
+                TryDelete(outputPath);
+                return false;
+            }
+
+            if (!IsMp4Valid(outputPath))
+            {
+                Log.Warning("MediaMerge: merged file has no moov atom — corrupt");
+                TryDelete(outputPath);
+                return false;
+            }
+
+            Log.Information("MediaMerge: done ({Bytes:N0} bytes) → {Out}",
+                fi.Length, outputPath);
+            return true;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             Log.Warning("MediaMerge: cancelled by caller");
-            TryDeleteFile(outputPath);
+            TryDelete(outputPath);
             return false;
         }
         catch (OperationCanceledException)
         {
-            Log.Warning("MediaMerge: timeout after {Ms}ms", MergeTimeoutMs);
-            TryDeleteFile(outputPath);
+            Log.Warning("MediaMerge: timeout after {Ms} ms", MergeTimeoutMs);
+            TryDelete(outputPath);
             return false;
         }
         catch (Exception ex)
         {
             Log.Error(ex, "MediaMerge: unexpected error");
-            TryDeleteFile(outputPath);
+            TryDelete(outputPath);
             return false;
-        }
-    }
-    
-    private static void TryDeleteFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "MediaMerge: failed to delete partial file {Path}", path);
         }
     }
 
@@ -108,14 +116,14 @@ public class MediaMergeService
 
                 uint size = ((uint)header[0] << 24)
                            | ((uint)header[1] << 16)
-                           | ((uint)header[2] << 8)
+                           | ((uint)header[2] <<  8)
                            |  (uint)header[3];
 
-                string boxType = System.Text.Encoding.ASCII.GetString(header[4..8]);
+                string box = System.Text.Encoding.ASCII.GetString(header[4..8]);
 
-                if (boxType == "moov")
+                if (box == "moov")
                 {
-                    Log.Debug("MediaMerge: moov atom found at offset {Offset}", fs.Position - 8);
+                    Log.Debug("MediaMerge: moov at offset {Off}", fs.Position - 8);
                     return true;
                 }
 
@@ -141,7 +149,7 @@ public class MediaMergeService
                 }
             }
 
-            Log.Warning("MediaMerge: no moov atom found in {Path} — file is corrupt", path);
+            Log.Warning("MediaMerge: no moov atom in {Path}", path);
             return false;
         }
         catch (Exception ex)
@@ -149,5 +157,12 @@ public class MediaMergeService
             Log.Warning(ex, "MediaMerge: IsMp4Valid scan failed for {Path}", path);
             return false;
         }
+    }
+    
+    private static void TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); }
+        catch (Exception ex)
+        { Log.Warning(ex, "MediaMerge: failed to delete {Path}", path); }
     }
 }

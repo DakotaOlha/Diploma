@@ -531,6 +531,33 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- Якість запису -->
+                            <Border Background="#1A2D4C4F" 
+                                    CornerRadius="8" 
+                                    Padding="16,12"
+                                    Margin="0,0,0,8"
+                                    BorderBrush="#2D4C4F" 
+                                    BorderThickness="1">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Center"
+                                                Margin="0,0,0,4">
+                                        <TextBlock Text="Якість:"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,12,0"
+                                                   Foreground="#78B4B7"
+                                                   FontWeight="Medium"/>
+                                        <ComboBox Style="{StaticResource CustomComboBoxStyle}"
+                                                  ItemsSource="{Binding AvailableQualities}"
+                                                  SelectedItem="{Binding SelectedQuality}"
+                                                  DisplayMemberPath="Label"
+                                                  Width="240"
+                                                  IsEnabled="{Binding CanSelectQuality}"
+                                                  Tag="Оберіть якість"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
                             <!-- Кнопки керування -->
                             <StackPanel Orientation="Horizontal" 
                                         HorizontalAlignment="Center"
