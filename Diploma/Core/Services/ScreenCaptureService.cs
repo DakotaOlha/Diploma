@@ -29,21 +29,18 @@ public enum CaptureQuality { Low, Medium, High }
 
 public sealed class CaptureQualityProfile
 {
-    public CaptureQuality Quality { get; init; }
-    public string Label { get; init; } = string.Empty;
-
-    public int Fps { get; init; }
-
-    public int Crf { get; init; }
-
-    public string EncoderPreset { get; init; } = string.Empty;
-    public int DownscaleWidth { get; init; }
+    public CaptureQuality Quality      { get; init; }
+    public string         Label        { get; init; } = string.Empty;
+    public int            Fps          { get; init; }
+    public int            Crf          { get; init; }
+    public string         EncoderPreset { get; init; } = string.Empty;
+    public int            DownscaleWidth { get; init; }
 
     public static CaptureQualityProfile Get(CaptureQuality q) => q switch
     {
-        CaptureQuality.Low    => Low,
-        CaptureQuality.High   => High,
-        _                     => Medium,
+        CaptureQuality.Low  => Low,
+        CaptureQuality.High => High,
+        _                   => Medium,
     };
 
     public static readonly CaptureQualityProfile Low = new()
@@ -84,10 +81,9 @@ internal sealed class TimestampedFrame : IVideoFrame, IDisposable
     private readonly bool   _pooled;
     private          bool   _disposed;
 
-    public int Width { get; }
-    public int Height { get; }
-    public string Format => "bgra";
-
+    public int      Width     { get; }
+    public int      Height    { get; }
+    public string   Format    => "bgra";
     public TimeSpan Timestamp { get; }
 
     public TimestampedFrame(byte[] data, int width, int height,
@@ -101,7 +97,7 @@ internal sealed class TimestampedFrame : IVideoFrame, IDisposable
         _pooled     = pooled;
     }
 
-    public void Serialize(Stream pipe)      => pipe.Write(_data, 0, _byteLength);
+    public void Serialize(Stream pipe) => pipe.Write(_data, 0, _byteLength);
     public Task SerializeAsync(Stream pipe, CancellationToken ct)
         => pipe.WriteAsync(_data, 0, _byteLength, ct);
 
@@ -131,31 +127,30 @@ public sealed class DropStatsEventArgs : EventArgs
 
 public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 {
-    private const int ChannelCapacity      = 16;
-    private const int FirstFrameTimeoutMs  = 5_000;
+    private const int  ChannelCapacity     = 8;
+    private const int  FirstFrameTimeoutMs = 5_000;
     private const long SnapshotIntervalMs  = 200;
-    private const int LogRingCapacity      = 60;
+    private const int  LogRingCapacity     = 60;
 
-    private const double DropRateHighThreshold = 0.12;
+    private const double DropRateHighThreshold = 0.15;
     private const double DropRateLowThreshold  = 0.02;
 
     private int _state = (int)CaptureState.Idle;
-
     private CaptureState State => (CaptureState)Volatile.Read(ref _state);
 
     private bool TryTransition(CaptureState expected, CaptureState next)
         => Interlocked.CompareExchange(ref _state, (int)next, (int)expected) == (int)expected;
 
-    private string?                         _outputPath;
-    private GraphicsCaptureItem?            _captureItem;
-    private IDirect3DDevice?                _winrtDevice;
-    private Channel<TimestampedFrame>?      _frameChannel;
+    private string?                     _outputPath;
+    private GraphicsCaptureItem?        _captureItem;
+    private IDirect3DDevice?            _winrtDevice;
+    private Channel<TimestampedFrame>?  _frameChannel;
 
-    private CancellationTokenSource?        _cts;
-    private CancellationTokenSource?        _encodeCts;
-    private Task?                           _captureTask;
-    private Task?                           _encodeTask;
-    private TaskCompletionSource<bool>?     _stopRequested;
+    private CancellationTokenSource?    _cts;
+    private CancellationTokenSource?    _encodeCts;
+    private Task?                       _captureTask;
+    private Task?                       _encodeTask;
+    private TaskCompletionSource<bool>? _stopRequested;
 
     private CaptureQualityProfile _quality = CaptureQualityProfile.Medium;
 
@@ -167,7 +162,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
     private readonly Stopwatch _recordingClock = new();
 
-    private readonly object _snapshotLock   = new();
+    private readonly object _snapshotLock = new();
     private byte[]? _latestFrame;
     private int     _latestFrameWidth;
     private int     _latestFrameHeight;
@@ -344,7 +339,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
             if (finished != _encodeTask)
             {
-                Log("Encode did not finish in 30 s — forcing cancel (MP4 may be truncated).");
+                Log("Encode did not finish in 30 s — forcing cancel.");
                 _encodeCts?.Cancel();
             }
 
@@ -431,20 +426,12 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
                 session.StartCapture();
             });
-            
-            using var firstFrameCts = new CancellationTokenSource(FirstFrameTimeoutMs);
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-                                   token, firstFrameCts.Token);
 
+            using var firstFrameCts = new CancellationTokenSource(FirstFrameTimeoutMs);
+            using var linked        = CancellationTokenSource.CreateLinkedTokenSource(
+                                          token, firstFrameCts.Token);
             bool gotFirst = false;
-            try
-            {
-                await foreach (var _ in _frameChannel!.Reader.ReadAllAsync(linked.Token))
-                {
-                    gotFirst = true;
-                    break;
-                }
-            }
+            try   { gotFirst = await _frameChannel!.Reader.WaitToReadAsync(linked.Token); }
             catch (OperationCanceledException) { }
 
             if (!gotFirst || token.IsCancellationRequested)
@@ -454,7 +441,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
             }
 
             _recordingClock.Restart();
-            Log("First frame — starting encode clock and RecordingStarted event.");
+            Log("First frame ready — encode clock started.");
 
             RecordingStarted?.Invoke(this, EventArgs.Empty);
 
@@ -473,7 +460,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
             catch (OperationCanceledException) { }
         }
         catch (OperationCanceledException) { Log("CaptureLoop cancelled."); }
-        catch (Exception ex) { Log($"Capture error: {ex.GetType().Name}: {ex.Message}"); }
+        catch (Exception ex)               { Log($"Capture error: {ex.GetType().Name}: {ex.Message}"); }
         finally
         {
             await Application.Current.Dispatcher.InvokeAsync(() =>
@@ -486,140 +473,105 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
         }
     }
 
-    private async Task EncodeLoopAsync(
-        string outputPath, int width, int height, CancellationToken ct)
+    private async Task EncodeLoopAsync(string outputPath, int width, int height, CancellationToken ct)
     {
         int targetFps = _quality.Fps;
-
-        long windowStartMs  = Environment.TickCount64;
+        long windowStartMs = Environment.TickCount64;
         const int WindowSec = 3;
 
         IEnumerable<IVideoFrame> FrameSource()
         {
             var reader = _frameChannel!.Reader;
-
-            TimestampedFrame? current = null;
-            while (current is null)
-            {
-                if (reader.Completion.IsCompleted) yield break;
-                reader.TryRead(out current);
-                if (current is null) Thread.SpinWait(200);
-            }
-
             timeBeginPeriod(1);
-
-            long startTicks    = Stopwatch.GetTimestamp();
-            long frameIndex    = 0;
+            
+            long frameDurationTicks = Stopwatch.Frequency / targetFps;
+            long nextFrameTicks = Stopwatch.GetTimestamp();
+            TimestampedFrame? currentFrame = null;
 
             try
             {
-                while (true)
+                while (!ct.IsCancellationRequested)
                 {
-                    while (reader.TryRead(out var newer))
+                    if (reader.Completion.IsCompleted && reader.Count == 0)
+                        break;
+
+                    bool gotNewFrame = false;
+
+                    while (reader.TryRead(out var candidate))
                     {
-                        current.Dispose();
-                        current = newer;
+                        currentFrame?.Dispose();
+                        currentFrame = candidate;
+                        gotNewFrame = true;
+                        Interlocked.Increment(ref _deliveredFramesWindow);
                     }
 
-                    if (current is null)
+                    if (currentFrame == null)
                     {
-                        if (reader.Completion.IsCompleted) yield break;
-                        Thread.SpinWait(200);
+                        Thread.Sleep(1);
+                        nextFrameTicks = Stopwatch.GetTimestamp(); 
                         continue;
                     }
 
-                    Interlocked.Increment(ref _deliveredFramesWindow);
+                    yield return currentFrame;
 
-                    var toYield = current;
-                    current = null;
-                    yield return toYield;
-                    toYield.Dispose();
+                    nextFrameTicks += frameDurationTicks;
+                    long now = Stopwatch.GetTimestamp();
+                    long delayTicks = nextFrameTicks - now;
 
-                    frameIndex++;
-                    
+                    if (delayTicks > 0)
+                    {
+                        int delayMs = (int)(delayTicks * 1000 / Stopwatch.Frequency);
+                        if (delayMs > 0) Thread.Sleep(delayMs);
+                    }
+                    else
+                    {
+                        nextFrameTicks = now;
+                    }
+
                     var nowMs = Environment.TickCount64;
                     if (nowMs - windowStartMs >= WindowSec * 1000L)
                     {
-                        long dropped   = Interlocked.Exchange(ref _droppedFramesWindow, 0);
+                        long dropped = Interlocked.Exchange(ref _droppedFramesWindow, 0);
                         long delivered = Interlocked.Exchange(ref _deliveredFramesWindow, 0);
-                        long total     = dropped + delivered;
+                        long total = dropped + delivered;
                         double dropRate = total > 0 ? (double)dropped / total : 0.0;
 
                         if (dropRate > DropRateHighThreshold && targetFps > 10)
-                        {
                             targetFps = Math.Max(10, targetFps - 5);
-                            Log($"Adaptive: drop {dropRate:P0} → lower fps to {targetFps}");
-                        }
                         else if (dropRate < DropRateLowThreshold && targetFps < _quality.Fps)
-                        {
                             targetFps = _quality.Fps;
-                            Log($"Adaptive: drop {dropRate:P0} → restore fps to {targetFps}");
-                        }
 
-                        RaiseDropStats(Interlocked.Read(ref _droppedFramesTotal),
-                                       dropRate, targetFps);
+                        frameDurationTicks = Stopwatch.Frequency / targetFps;
+
+                        RaiseDropStats(Interlocked.Read(ref _droppedFramesTotal), dropRate, targetFps);
                         windowStartMs = nowMs;
                     }
-
-                    long ticksPerFrame  = Stopwatch.Frequency / targetFps;
-                    long deadlineTicks  = startTicks + frameIndex * ticksPerFrame;
-                    long nowTicks       = Stopwatch.GetTimestamp();
-                    long remainTicks    = deadlineTicks - nowTicks;
-
-                    if (remainTicks > 0)
-                    {
-                        long remainMs = remainTicks * 1000L / Stopwatch.Frequency;
-                        if (remainMs > 1)
-                            Thread.Sleep((int)(remainMs - 1));
-
-                        while (Stopwatch.GetTimestamp() < deadlineTicks)
-                            Thread.SpinWait(10);
-                    }
-                    else if (remainTicks < -ticksPerFrame * 2)
-                    {
-                        startTicks = Stopwatch.GetTimestamp() - ticksPerFrame;
-                        frameIndex = 1;
-                    }
-
-                    while (current is null && !reader.Completion.IsCompleted)
-                    {
-                        reader.TryRead(out current);
-                        if (current is null) Thread.SpinWait(50);
-                    }
-
-                    if (current is null && reader.Completion.IsCompleted)
-                        yield break;
                 }
             }
             finally
             {
+                currentFrame?.Dispose();
                 timeEndPeriod(1);
-                current?.Dispose();
             }
         }
 
-        var videoSource = new RawVideoPipeSource(FrameSource())
-        {
-            FrameRate = _quality.Fps,
-        };
+        var videoSource = new RawVideoPipeSource(FrameSource()) { FrameRate = targetFps };
 
         try
         {
-            Log($"FFmpeg encode started ({width}×{height} @ {_quality.Fps} fps declared)…");
-
+            Log($"FFmpeg encode started ({width}×{height} @ {targetFps} fps)…");
             var encoder = HardwareEncoderDetector.Detect();
 
             var encodeArgs = FFMpegArguments
                 .FromPipeInput(videoSource, opts => opts
-                    .WithVideoCodec("rawvideo")
                     .ForceFormat("rawvideo")
-                    .WithCustomArgument(
-                        $"-pix_fmt bgra -s {width}x{height} -r {_quality.Fps}"))
+                    .WithCustomArgument($"-pix_fmt bgra -s {width}x{height} -r {targetFps}"))
                 .OutputToFile(outputPath, overwrite: true, opts =>
                 {
                     opts.WithVideoCodec(encoder)
                         .WithCustomArgument("-pix_fmt yuv420p")
-                        .WithCustomArgument($"-r {_quality.Fps}");
+                        .WithCustomArgument($"-r {targetFps}")
+                        .WithCustomArgument("-fps_mode cfr");
 
                     ApplyEncoderOptions(opts, encoder);
                 })
@@ -627,13 +579,11 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
             var ok = await encodeArgs.ProcessAsynchronously(throwOnError: false);
 
-            if (ok)
-                Log("Encode complete — MP4 fully written.");
-            else
-                Log("Encode completed with FFmpeg warnings (check stderr).");
+            Log(ok ? "Encode complete — MP4 fully written."
+                   : "Encode completed with FFmpeg warnings.");
 
             var total = Interlocked.Read(ref _droppedFramesTotal);
-            if (total > 0) Log($"Total frames dropped: {total}");
+            if (total > 0) Log($"Total frames dropped during capture: {total}");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -643,7 +593,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
     private void ApplyEncoderOptions(FFMpegArgumentOptions opts, string encoder)
     {
-        int  crf    = _quality.Crf;
+        int    crf    = _quality.Crf;
         string preset = _quality.EncoderPreset;
 
         switch (encoder)
@@ -656,7 +606,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
             case "h264_nvenc":
                 int nvQp = Math.Clamp(crf, 18, 35);
-                opts.WithCustomArgument($"-preset p1")
+                opts.WithCustomArgument("-preset p1")
                     .WithCustomArgument("-rc vbr")
                     .WithCustomArgument($"-cq {nvQp}")
                     .WithCustomArgument("-b:v 0");
@@ -675,7 +625,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
             default:
                 opts.WithConstantRateFactor(crf)
-                    .WithCustomArgument($"-preset ultrafast");
+                    .WithCustomArgument("-preset ultrafast");
                 break;
         }
     }
@@ -791,8 +741,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                         if (!needScale)
                         {
                             for (int y = 0; y < nativeH; y++)
-                                new ReadOnlySpan<byte>(
-                                    src + y * mapped.RowPitch, nativeW * 4)
+                                new ReadOnlySpan<byte>(src + y * mapped.RowPitch, nativeW * 4)
                                     .CopyTo(new Span<byte>(outBuf, y * nativeW * 4, nativeW * 4));
                         }
                         else
@@ -801,13 +750,12 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                             double yRatio = (double)nativeH / encodeH;
                             for (int oy = 0; oy < encodeH; oy++)
                             {
-                                int sy = (int)(oy * yRatio);
+                                int   sy     = (int)(oy * yRatio);
                                 byte* srcRow = src + sy * mapped.RowPitch;
                                 int   outOff = oy * encodeW * 4;
                                 for (int ox = 0; ox < encodeW; ox++)
                                 {
-                                    int sx = (int)(ox * xRatio);
-                                    int inOff = sx * 4;
+                                    int inOff = (int)(ox * xRatio) * 4;
                                     outBuf[outOff]     = srcRow[inOff];
                                     outBuf[outOff + 1] = srcRow[inOff + 1];
                                     outBuf[outOff + 2] = srcRow[inOff + 2];
@@ -872,7 +820,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
     private void Log(string message)
     {
-        var line     = $"{DateTime.Now:HH:mm:ss.fff} | {message}";
+        var line = $"{DateTime.Now:HH:mm:ss.fff} | {message}";
         string snap;
 
         lock (_logLock)
