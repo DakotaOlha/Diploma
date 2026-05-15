@@ -139,7 +139,8 @@ public class WindowTitleMonitor : IDisposable
         GetWindowThreadProcessId(hWnd, out var pid);
         try
         {
-            return System.Diagnostics.Process.GetProcessById((int)pid).ProcessName;
+            using var proc = System.Diagnostics.Process.GetProcessById((int)pid);
+            return proc.ProcessName;
         }
         catch
         {
