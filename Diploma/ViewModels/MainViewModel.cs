@@ -6,6 +6,7 @@ using Diploma.Core.Interfaces;
 using Diploma.Core.Models;
 using Diploma.Core.Services;
 using Diploma.Views;
+using Serilog;
 
 namespace Diploma.ViewModels;
 
@@ -24,11 +25,11 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool     _isMicEnabled      = true;
     [ObservableProperty] private string   _selectedMicDevice = string.Empty;
 
-    [ObservableProperty] private IReadOnlyList<string>               _micDevices     = [];
-    [ObservableProperty] private ModeProfile?                        _selectedMode;
-    [ObservableProperty] private IReadOnlyList<ModeProfile>          _availableModes = [];
-    [ObservableProperty] private CaptureQualityProfile?              _selectedQuality;
-    [ObservableProperty] private IReadOnlyList<CaptureQualityProfile> _availableQualities = [];
+    [ObservableProperty] private IReadOnlyList<string>                _micDevices          = [];
+    [ObservableProperty] private ModeProfile?                         _selectedMode;
+    [ObservableProperty] private IReadOnlyList<ModeProfile>           _availableModes      = [];
+    [ObservableProperty] private CaptureQualityProfile?               _selectedQuality;
+    [ObservableProperty] private IReadOnlyList<CaptureQualityProfile> _availableQualities  = [];
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartRecordingCommand), nameof(StopRecordingCommand))]
@@ -46,14 +47,14 @@ public partial class MainViewModel : ObservableObject
     private readonly SemaphoreSlim _recordingLock = new(1, 1);
     private CancellationTokenSource? _startCts;
 
-    private int    _currentSessionId;
-    private string _currentAudioPath  = string.Empty;
-    private string _currentVideoPath  = string.Empty;
-    private string _currentSessionDir = string.Empty;
+    private int      _currentSessionId;
+    private string   _currentAudioPath  = string.Empty;
+    private string   _currentVideoPath  = string.Empty;
+    private string   _currentSessionDir = string.Empty;
     private DateTime _recordingStartedAt;
 
     private System.Windows.Threading.DispatcherTimer? _durationTimer;
-    
+
     public MainViewModel(
         IScreenCaptureService  captureService,
         ILogService            logService,
@@ -181,7 +182,7 @@ public partial class MainViewModel : ObservableObject
             if (_captureService is ScreenCaptureService scs && SelectedQuality is not null)
                 scs.Quality = SelectedQuality.Quality;
 
-            var videoDir = Path.Combine(
+            var videoDir  = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
                 "AlgoReplay");
             var diskCheck = _diskSpaceService.Check(videoDir);
@@ -248,32 +249,29 @@ public partial class MainViewModel : ObservableObject
     private async Task StopRecordingAsync()
     {
         _startCts?.Cancel();
-
         if (!await _recordingLock.WaitAsync(0)) return;
+
+        var sessionId = _currentSessionId;
+        var videoPath = _currentVideoPath;
+        var audioPath = _currentAudioPath;
 
         try
         {
             if (!IsRecording || IsBusy) return;
-
-            IsBusy     = true;
+            IsBusy = true;
+            IsRecording = false;
+            ResetDurationCounter();
             StatusText = "Зупинка та збереження...";
-
-            var sessionId = _currentSessionId;
-            var videoPath = _currentVideoPath;
-            var audioPath = _currentAudioPath;
+            NotifyCommands();
 
             _inputMonitor.Stop();
-
-            await _captureService.StopAsync();
 
             if (_audioCaptureService.IsRecording)
                 await _audioCaptureService.StopAsync();
 
+            await _captureService.StopAsync();
+
             await _logService.EndSessionAsync(sessionId);
-
-            IsRecording = false;
-            ResetDurationCounter();
-
             await ProcessMergeAsync(videoPath, audioPath, sessionId);
         }
         finally
@@ -284,10 +282,82 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    private async Task ProcessMergeAsync(string videoPath, string audioPath, int sessionId)
+    {
+        if (!MediaMergeService.IsMp4Valid(videoPath))
+        {
+            Log.Warning("ProcessMerge: video file invalid — {Path}", videoPath);
+            StatusText = "⚠️ Відеофайл пошкоджено (немає moov atom). Відео збережено без аудіо.";
+            await _logService.UpdateSessionVideoPathAsync(sessionId, videoPath);
+            return;
+        }
+
+        bool hasAudio = File.Exists(audioPath) && new FileInfo(audioPath).Length > 4_096;
+
+        if (!hasAudio)
+        {
+            StatusText = "✅ Збережено (без аудіо).";
+            await _logService.UpdateSessionVideoPathAsync(sessionId, videoPath);
+            return;
+        }
+
+        var dir    = Path.GetDirectoryName(videoPath)!;
+        var merged = Path.Combine(dir, "merged.mp4");
+
+        StatusText = "Обробка відео та аудіо...";
+
+        var ok = await _mediaMergeService.MergeAsync(videoPath, audioPath, merged);
+
+        if (ok)
+        {
+            await _logService.UpdateSessionVideoPathAsync(sessionId, merged);
+
+            TryDeleteFile(videoPath);
+            TryDeleteFile(audioPath);
+
+            StatusText = $"✅ Збережено: {Path.GetFileName(merged)}";
+        }
+        else
+        {
+            await _logService.UpdateSessionVideoPathAsync(sessionId, videoPath);
+            TryDeleteFile(audioPath);
+            StatusText = "⚠️ Merge не вдався. Відео без аудіо збережено.";
+        }
+    }
+
+    private void StartDurationTimer(DateTime startedAt)
+    {
+        StopDurationTimer();
+
+        _recordingStartedAt = startedAt;
+
+        _durationTimer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Background,
+            App.Current.Dispatcher)
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        _durationTimer.Tick += (_, _) =>
+            RecordingDuration = DateTime.UtcNow - _recordingStartedAt;
+        _durationTimer.Start();
+    }
+
+    private void ResetDurationCounter()
+    {
+        StopDurationTimer();
+        RecordingDuration = TimeSpan.Zero;
+    }
+
+    private void StopDurationTimer()
+    {
+        if (_durationTimer is null) return;
+        _durationTimer.Stop();
+        _durationTimer = null;
+    }
+
     private async Task RollbackStartAsync(int sessionId, string? sessionDir = null)
     {
         try { _inputMonitor.Stop(); } catch { }
-
         try { await _captureService.StopAsync(); } catch { }
 
         if (_audioCaptureService.IsRecording)
@@ -304,83 +374,6 @@ public partial class MainViewModel : ObservableObject
         _currentVideoPath  = string.Empty;
         _currentAudioPath  = string.Empty;
         ResetDurationCounter();
-    }
-
-    private void StartDurationTimer(DateTime startedAt)
-    {
-        ResetDurationCounter();
-        _recordingStartedAt = startedAt;
-
-        _durationTimer = new System.Windows.Threading.DispatcherTimer(
-            System.Windows.Threading.DispatcherPriority.Background,
-            App.Current.Dispatcher)
-        {
-            Interval = TimeSpan.FromSeconds(1)
-        };
-        _durationTimer.Tick += (_, _) =>
-            RecordingDuration = DateTime.UtcNow - _recordingStartedAt;
-        _durationTimer.Start();
-    }
-
-    private void ResetDurationCounter()
-    {
-        if (_durationTimer is not null)
-        {
-            _durationTimer.Stop();
-            _durationTimer = null;
-        }
-        _recordingStartedAt = DateTime.UtcNow;
-        RecordingDuration   = TimeSpan.Zero;
-    }
-
-    private async Task ProcessMergeAsync(string videoPath, string audioPath, int sessionId)
-    {
-        if (!MediaMergeService.IsMp4Valid(videoPath))
-        {
-            StatusText = "⚠️ Відеофайл пошкоджено (немає moov atom). Збережено audio окремо.";
-            return;
-        }
-
-        bool hasAudio = File.Exists(audioPath) && new FileInfo(audioPath).Length > 0;
-
-        if (hasAudio)
-        {
-            var dir    = Path.GetDirectoryName(videoPath)!;
-            var merged = Path.Combine(dir, "merged.mp4");
-
-            StatusText = "Обробка відео та аудіо...";
-            var ok = await _mediaMergeService.MergeAsync(videoPath, audioPath, merged);
-
-            if (ok)
-            {
-                await _logService.UpdateSessionVideoPathAsync(sessionId, merged);
-
-                TryDeleteFile(videoPath);
-                TryDeleteFile(audioPath);
-
-                StatusText = $"✅ Збережено: {Path.GetFileName(merged)}";
-                return;
-            }
-
-            StatusText = "⚠️ Merge не вдався. Відео без аудіо збережено.";
-            await _logService.UpdateSessionVideoPathAsync(sessionId, videoPath);
-        }
-        else
-        {
-            StatusText = "✅ Збережено (без аудіо).";
-        }
-    }
-
-    private static void TryDeleteFile(string path)
-    {
-        try { if (File.Exists(path)) File.Delete(path); }
-        catch { /* best effort */ }
-    }
-
-    private void NotifyCommands()
-    {
-        StartRecordingCommand.NotifyCanExecuteChanged();
-        StopRecordingCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand]
@@ -435,6 +428,12 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    private void NotifyCommands()
+    {
+        StartRecordingCommand.NotifyCanExecuteChanged();
+        StopRecordingCommand.NotifyCanExecuteChanged();
+    }
+
     partial void OnIsRecordingChanged(bool value)
     {
         OnPropertyChanged(nameof(CanSelectMode));
@@ -444,4 +443,10 @@ public partial class MainViewModel : ObservableObject
 
     private bool CanStart() => !IsRecording && !IsBusy;
     private bool CanStop()  => IsRecording  && !IsBusy;
+
+    private static void TryDeleteFile(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); }
+        catch { /* best effort */ }
+    }
 }
