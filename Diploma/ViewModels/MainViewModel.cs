@@ -115,7 +115,7 @@ public partial class MainViewModel : ObservableObject
             _inputMonitor.SetMode(SelectedMode?.Mode ?? RecordingMode.Personal);
             _inputMonitor.Start(_currentSessionId);
             
-            StartDurationTimer();
+            StartDurationTimer(realStart);
 
             if (IsMicEnabled && MicDevices.Count > 0)
             {
@@ -305,9 +305,11 @@ public partial class MainViewModel : ObservableObject
         }
     }
     
-    private void StartDurationTimer()
+    private void StartDurationTimer(DateTime startedAt)
     {
         ResetDurationCounter();
+
+        _recordingStartedAt = startedAt;
 
         _durationTimer = new System.Windows.Threading.DispatcherTimer(
             System.Windows.Threading.DispatcherPriority.Background,
@@ -331,7 +333,7 @@ public partial class MainViewModel : ObservableObject
             _durationTimer = null;
         }
 
-        _recordingStartedAt = default;
+        _recordingStartedAt = DateTime.UtcNow;
         RecordingDuration   = TimeSpan.Zero;
     }
     

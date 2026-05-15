@@ -63,6 +63,7 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     private Channel<BgraVideoFrame>? _frameChannel;
     
     private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _encodeCts;
     private Task?                    _captureTask;
     private Task?                    _encodeTask;
     private TaskCompletionSource<bool>? _stopRequested;
@@ -202,6 +203,7 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
             TaskCreationOptions.RunContinuationsAsynchronously);
  
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _encodeCts  = new CancellationTokenSource();
  
         Log("Beginning capture…");
  
@@ -244,17 +246,7 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
         Log("Stop requested…");
 
         _stopRequested?.TrySetResult(true);
-
         _cts?.Cancel();
-
-        if (_encodeTask is not null)
-        {
-            var finished = await Task.WhenAny(_encodeTask, Task.Delay(30_000))
-                .ConfigureAwait(false);
-
-            if (finished != _encodeTask)
-                Log("StopAsync: encode did not finish in 30 s — file may be incomplete.");
-        }
 
         if (_captureTask is not null)
         {
@@ -263,11 +255,30 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
             catch (Exception ex) { Log($"CaptureTask error on stop: {ex.Message}"); }
         }
 
+        if (_encodeTask is not null)
+        {
+            var finished = await Task.WhenAny(_encodeTask, Task.Delay(30_000))
+                .ConfigureAwait(false);
+
+            if (finished != _encodeTask)
+            {
+                Log("StopAsync: encode did not finish in 30s — forcing cancel.");
+                _encodeCts?.Cancel();
+            }
+        
+            try   { await _encodeTask.ConfigureAwait(false); }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log($"EncodeTask error on stop: {ex.Message}"); }
+        }
+
         ResetD3DState();
         CleanupPrepareContext();
 
         _cts?.Dispose();
         _cts = null;
+
+        _encodeCts?.Dispose();
+        _encodeCts = null;
 
         Interlocked.Exchange(ref _state, (int)CaptureState.Idle);
         Log("Recording stopped — service returned to Idle.");
@@ -275,11 +286,11 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
     
     private void CleanupPrepareContext()
     {
-        _outputPath  = null;
-        _captureItem = null;
-        _winrtDevice = null;
+        _outputPath    = null;
+        _captureItem   = null;
+        _winrtDevice   = null;
         _frameChannel?.Writer.TryComplete();
-        _frameChannel = null;
+        _frameChannel  = null;
         _stopRequested = null;
         _captureTask   = null;
         _encodeTask    = null;
@@ -362,7 +373,7 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
             RecordingStarted?.Invoke(this, EventArgs.Empty);
  
             _encodeTask = Task.Factory.StartNew(
-                () => EncodeLoopAsync(outputPath, width, height, token),
+                () => EncodeLoopAsync(outputPath, width, height, _encodeCts!.Token),
                 CancellationToken.None,
                 TaskCreationOptions.LongRunning,
                 TaskScheduler.Default).Unwrap();
@@ -756,10 +767,13 @@ public class ScreenCaptureService : IScreenCaptureService, IDisposable
 
         _stopRequested?.TrySetResult(true);
         _cts?.Cancel();
+        _encodeCts?.Cancel();
 
         _captureTask?.Wait(TimeSpan.FromSeconds(2));
         _encodeTask?.Wait(TimeSpan.FromSeconds(30));
+
         _cts?.Dispose();
+        _encodeCts?.Dispose();
 
         ResetD3DState();
     }

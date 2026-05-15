@@ -24,9 +24,13 @@ public class InputMonitorService : IInputMonitorService
     private DateTime _lastActivityTime;
     private int _sessionId;
     private bool _idleLogged;
-    private bool _ctrlDown;
-    private bool _shiftDown;
     private bool _isRunning;
+    
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern short GetKeyState(int nVirtKey);
+
+    private static bool IsCtrlDown()  => (GetKeyState(0x11) & 0x8000) != 0;
+    private static bool IsShiftDown() => (GetKeyState(0x10) & 0x8000) != 0;
     
     public InputMonitorService(ILogService logService, ModeProfileService profileService)
     {
@@ -53,11 +57,10 @@ public class InputMonitorService : IInputMonitorService
         {
             _hook = Hook.GlobalEvents();
             _hook.KeyDown += OnKeyDown;
-            _hook.KeyUp += OnKeyUp;
         });
 
         _idleTimer = new System.Threading.Timer(CheckIdle, null, 10000, 30000);
-        
+
         _windowTitleMonitor.Start(sessionId);
         _processMonitor.Start(sessionId);
     }
@@ -72,16 +75,7 @@ public class InputMonitorService : IInputMonitorService
     {
         UpdateActivity();
 
-        if (e.KeyCode == Keys.LControlKey || e.KeyCode == Keys.RControlKey) _ctrlDown = true;
-        if (e.KeyCode == Keys.LShiftKey || e.KeyCode == Keys.RShiftKey) _shiftDown = true;
-
-        _ = _processor.ProcessShortcutAsync(_sessionId, e.KeyCode, _ctrlDown, _shiftDown);
-    }
-
-    private void OnKeyUp(object? sender, KeyEventArgs e)
-    {
-        if (e.KeyCode == Keys.LControlKey || e.KeyCode == Keys.RControlKey) _ctrlDown = false;
-        if (e.KeyCode == Keys.LShiftKey || e.KeyCode == Keys.RShiftKey) _shiftDown = false;
+        _ = _processor.ProcessShortcutAsync(_sessionId, e.KeyCode, IsCtrlDown(), IsShiftDown());
     }
 
     private void UpdateActivity()
@@ -125,7 +119,6 @@ public class InputMonitorService : IInputMonitorService
         {
             if (_hook is null) return;
             _hook.KeyDown -= OnKeyDown;
-            _hook.KeyUp -= OnKeyUp;
             _hook.Dispose();
             _hook = null;
         });
