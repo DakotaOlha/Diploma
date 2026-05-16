@@ -118,13 +118,12 @@ public partial class MainViewModel : ObservableObject
         _captureService.RecordingStarted += async (_, _) =>
         {
             var realStart = DateTime.UtcNow;
-            _recordingStartedAt = realStart;
             _logService.AdjustSessionStart(_currentSessionId, realStart);
 
             _inputMonitor.SetMode(SelectedMode?.Mode ?? RecordingMode.Personal);
             _inputMonitor.Start(_currentSessionId);
 
-            StartDurationTimer(realStart);
+            StartDurationTimer();
 
             if (IsMicEnabled && MicDevices.Count > 0)
             {
@@ -152,13 +151,9 @@ public partial class MainViewModel : ObservableObject
                     return;
                 }
 
-                var fpsSuffix = args.CurrentFps < (SelectedQuality?.Fps ?? 30)
-                    ? $"  |  {args.CurrentFps} fps ↓"
-                    : string.Empty;
-
-                DropWarning    = $"⚠️ {args.TotalDropped} frames dropped{fpsSuffix}";
+                DropWarning    = $"⚠️ {args.TotalDropped} frames dropped";
                 HasDropWarning = true;
-
+ 
                 ((App)App.Current).GetOverlay()
                     .UpdateDropStats(args.TotalDropped, args.CurrentFps);
             });
@@ -325,12 +320,9 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    private void StartDurationTimer(DateTime startedAt)
+    private void StartDurationTimer()
     {
         StopDurationTimer();
-
-        _recordingStartedAt = startedAt;
-
         _durationTimer = new System.Windows.Threading.DispatcherTimer(
             System.Windows.Threading.DispatcherPriority.Background,
             App.Current.Dispatcher)
@@ -338,7 +330,7 @@ public partial class MainViewModel : ObservableObject
             Interval = TimeSpan.FromSeconds(1)
         };
         _durationTimer.Tick += (_, _) =>
-            RecordingDuration = DateTime.UtcNow - _recordingStartedAt;
+            RecordingDuration = _captureService.RecordingElapsed;
         _durationTimer.Start();
     }
 
