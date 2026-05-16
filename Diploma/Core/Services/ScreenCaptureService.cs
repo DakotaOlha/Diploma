@@ -127,13 +127,11 @@ public sealed class DropStatsEventArgs : EventArgs
 
 public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 {
-    private const int  ChannelCapacity     = 8;
     private const int  FirstFrameTimeoutMs = 5_000;
     private const long SnapshotIntervalMs  = 200;
     private const int  LogRingCapacity     = 60;
-
-    private const double DropRateHighThreshold = 0.15;
-    private const double DropRateLowThreshold  = 0.02;
+    
+    private int _channelCapacity = 90;
 
     private int _state = (int)CaptureState.Idle;
     private CaptureState State => (CaptureState)Volatile.Read(ref _state);
@@ -161,6 +159,8 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
     }
 
     private readonly Stopwatch _recordingClock = new();
+    
+    public TimeSpan RecordingElapsed => _recordingClock.Elapsed;
 
     private readonly object _snapshotLock = new();
     private byte[]? _latestFrame;
@@ -175,8 +175,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
     private readonly object      _d3dLock = new();
 
     private long _droppedFramesTotal;
-    private long _droppedFramesWindow;
-    private long _deliveredFramesWindow;
 
     private readonly object   _logLock = new();
     private readonly string[] _logRing = new string[LogRingCapacity];
@@ -233,7 +231,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
             var winrtDevice = CreateD3DDevice();
 
             var channel = Channel.CreateBounded<TimestampedFrame>(
-                new BoundedChannelOptions(ChannelCapacity)
+                new BoundedChannelOptions(_channelCapacity)
                 {
                     FullMode     = BoundedChannelFullMode.DropOldest,
                     SingleWriter = true,
@@ -246,8 +244,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
             _frameChannel = channel;
 
             _droppedFramesTotal    = 0;
-            _droppedFramesWindow   = 0;
-            _deliveredFramesWindow = 0;
 
             Log($"Prepared — quality={_quality.Label}");
             CaptureTargetSelected?.Invoke(this, EventArgs.Empty);
@@ -269,6 +265,8 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
+        _channelCapacity = _quality.Fps * 3;
+        
         if (!TryTransition(CaptureState.Prepared, CaptureState.Recording))
             throw new InvalidOperationException(
                 $"BeginCaptureAsync requires Prepared state (current: {State}).");
@@ -334,12 +332,12 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
         if (_encodeTask is not null)
         {
-            var finished = await Task.WhenAny(_encodeTask, Task.Delay(30_000))
-                                     .ConfigureAwait(false);
+            var finished = await Task.WhenAny(_encodeTask, Task.Delay(10_000))
+                .ConfigureAwait(false);
 
             if (finished != _encodeTask)
             {
-                Log("Encode did not finish in 30 s — forcing cancel.");
+                Log("Encode did not finish in 10 s — forcing cancel.");
                 _encodeCts?.Cancel();
             }
 
@@ -419,7 +417,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                     if (!writer.TryWrite(tsFrame))
                     {
                         Interlocked.Increment(ref _droppedFramesTotal);
-                        Interlocked.Increment(ref _droppedFramesWindow);
                         tsFrame.Dispose();
                     }
                 };
@@ -475,119 +472,172 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
     private async Task EncodeLoopAsync(string outputPath, int width, int height, CancellationToken ct)
     {
-        int targetFps = _quality.Fps;
-        long windowStartMs = Environment.TickCount64;
-        const int WindowSec = 3;
-
-        IEnumerable<IVideoFrame> FrameSource()
+        // Фіксуємо FPS один раз — не змінюється протягом запису
+        int fixedFps = _quality.Fps;
+ 
+        // Окрема черга між frame-pacer і FFmpeg pipe writer.
+        // Wait (не DropOldest) — якщо FFmpeg відстає, pacer чекає,
+        // але не пропускає кадри в timeline відео.
+        // Розмір: FPS * 2 секунди — достатній буфер для encoder spikes.
+        var encodeChannel = Channel.CreateBounded<TimestampedFrame>(
+            new BoundedChannelOptions(fixedFps * 2)
+            {
+                FullMode     = BoundedChannelFullMode.Wait,
+                SingleWriter = true,
+                SingleReader = true,
+            });
+ 
+        // Frame pacer: окремий LongRunning thread.
+        // Відповідальність: читати з _frameChannel і писати в encodeChannel
+        // з точним timing (fixedFps). НЕ виконує IO до FFmpeg pipe.
+        var pacerTask = Task.Factory.StartNew(() =>
         {
-            var reader = _frameChannel!.Reader;
             timeBeginPeriod(1);
-            
-            long frameDurationTicks = Stopwatch.Frequency / targetFps;
-            long nextFrameTicks = Stopwatch.GetTimestamp();
-            TimestampedFrame? currentFrame = null;
-
+ 
+            long frameDurationTicks = Stopwatch.Frequency / fixedFps;
+            long nextTick           = Stopwatch.GetTimestamp();
+            TimestampedFrame? current = null;
+ 
             try
             {
+                var reader = _frameChannel!.Reader;
+ 
                 while (!ct.IsCancellationRequested)
                 {
+                    // Виходимо якщо capture завершився і черга порожня
                     if (reader.Completion.IsCompleted && reader.Count == 0)
                         break;
-
-                    bool gotNewFrame = false;
-
+ 
+                    // Зчитуємо всі доступні кадри — беремо тільки найсвіжіший
                     while (reader.TryRead(out var candidate))
                     {
-                        currentFrame?.Dispose();
-                        currentFrame = candidate;
-                        gotNewFrame = true;
-                        Interlocked.Increment(ref _deliveredFramesWindow);
+                        current?.Dispose();
+                        current = candidate;
                     }
-
-                    if (currentFrame == null)
+ 
+                    long now  = Stopwatch.GetTimestamp();
+                    long wait = nextTick - now;
+ 
+                    if (wait > 0)
                     {
-                        Thread.Sleep(1);
-                        nextFrameTicks = Stopwatch.GetTimestamp(); 
-                        continue;
+                        // Гібридне очікування: Sleep для великих інтервалів + spin для точності
+                        int sleepMs = (int)(wait * 1000L / Stopwatch.Frequency) - 1;
+                        if (sleepMs > 1)
+                            Thread.Sleep(sleepMs);
+ 
+                        // Spin-wait для останнього ~1ms без yield
+                        while (Stopwatch.GetTimestamp() < nextTick)
+                        {
+                            // Якщо залишилось > 0.5ms — відпускаємо timeslice
+                            if (nextTick - Stopwatch.GetTimestamp() >
+                                Stopwatch.Frequency / 2000)
+                                Thread.Sleep(0);
+                        }
                     }
-
-                    yield return currentFrame;
-
-                    nextFrameTicks += frameDurationTicks;
-                    long now = Stopwatch.GetTimestamp();
-                    long delayTicks = nextFrameTicks - now;
-
-                    if (delayTicks > 0)
+ 
+                    // Рухаємо cursor вперед на один frame slot
+                    nextTick += frameDurationTicks;
+ 
+                    // Антидрейф: якщо накопичили борг більше 2 кадрів — скидаємо.
+                    // Це відбувається після довгого GC або OS scheduling jitter.
+                    now = Stopwatch.GetTimestamp();
+                    if (nextTick < now - frameDurationTicks * 2)
                     {
-                        int delayMs = (int)(delayTicks * 1000 / Stopwatch.Frequency);
-                        if (delayMs > 0) Thread.Sleep(delayMs);
+                        Log($"Pacer: clock drift detected, resetting. " +
+                            $"Debt={(now - nextTick) * 1000 / Stopwatch.Frequency}ms");
+                        nextTick = now;
                     }
-                    else
+ 
+                    // Якщо кадру ще немає — чекаємо наступного slot без запису.
+                    // FFmpeg отримає той самий кадр ще раз (freeze-frame) — це OK.
+                    if (current == null) continue;
+ 
+                    // Записуємо в encodeChannel.
+                    // Якщо channel повний (FFmpeg відстає) — чекаємо (Wait mode).
+                    // Використовуємо синхронний write через TryWrite з fallback.
+                    if (!encodeChannel.Writer.TryWrite(current))
                     {
-                        nextFrameTicks = now;
-                    }
-
-                    var nowMs = Environment.TickCount64;
-                    if (nowMs - windowStartMs >= WindowSec * 1000L)
-                    {
-                        long dropped = Interlocked.Exchange(ref _droppedFramesWindow, 0);
-                        long delivered = Interlocked.Exchange(ref _deliveredFramesWindow, 0);
-                        long total = dropped + delivered;
-                        double dropRate = total > 0 ? (double)dropped / total : 0.0;
-
-                        if (dropRate > DropRateHighThreshold && targetFps > 10)
-                            targetFps = Math.Max(10, targetFps - 5);
-                        else if (dropRate < DropRateLowThreshold && targetFps < _quality.Fps)
-                            targetFps = _quality.Fps;
-
-                        frameDurationTicks = Stopwatch.Frequency / targetFps;
-
-                        RaiseDropStats(Interlocked.Read(ref _droppedFramesTotal), dropRate, targetFps);
-                        windowStartMs = nowMs;
+                        // Channel тимчасово повний — робимо sync wait
+                        encodeChannel.Writer.WriteAsync(current, ct)
+                            .AsTask().GetAwaiter().GetResult();
                     }
                 }
             }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log($"Pacer error: {ex.GetType().Name}: {ex.Message}"); }
             finally
             {
-                currentFrame?.Dispose();
+                // НЕ dispose current — він вже у encodeChannel або буде dispose нижче
+                encodeChannel.Writer.TryComplete();
                 timeEndPeriod(1);
+                Log("Frame pacer finished.");
+            }
+ 
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+ 
+        // FFmpeg frame source: читає з encodeChannel без будь-якого timing.
+        // Весь timing контролюється pacer thread вище.
+        // Цей метод виконується в LongRunning encode thread.
+        IEnumerable<IVideoFrame> FrameSource()
+        {
+            var reader = encodeChannel.Reader;
+            while (true)
+            {
+                // Блокуємо поки є дані або channel не закрито
+                bool hasData;
+                try
+                {
+                    hasData = reader.WaitToReadAsync(ct).AsTask().GetAwaiter().GetResult();
+                }
+                catch (OperationCanceledException) { break; }
+ 
+                if (!hasData) break;
+ 
+                while (reader.TryRead(out var frame))
+                    yield return frame;
             }
         }
-
-        var videoSource = new RawVideoPipeSource(FrameSource()) { FrameRate = targetFps };
-
+ 
+        var videoSource = new RawVideoPipeSource(FrameSource()) { FrameRate = fixedFps };
+ 
         try
         {
-            Log($"FFmpeg encode started ({width}×{height} @ {targetFps} fps)…");
+            Log($"FFmpeg encode started ({width}×{height} @ {fixedFps} fps, " +
+                $"encodeBuffer={fixedFps * 2} frames)…");
             var encoder = HardwareEncoderDetector.Detect();
-
+ 
             var encodeArgs = FFMpegArguments
                 .FromPipeInput(videoSource, opts => opts
                     .ForceFormat("rawvideo")
-                    .WithCustomArgument($"-pix_fmt bgra -s {width}x{height} -r {targetFps}"))
+                    .WithCustomArgument($"-pix_fmt bgra -s {width}x{height} -r {fixedFps}"))
                 .OutputToFile(outputPath, overwrite: true, opts =>
                 {
                     opts.WithVideoCodec(encoder)
                         .WithCustomArgument("-pix_fmt yuv420p")
-                        .WithCustomArgument($"-r {targetFps}")
+                        .WithCustomArgument($"-r {fixedFps}")
                         .WithCustomArgument("-fps_mode cfr");
-
+ 
                     ApplyEncoderOptions(opts, encoder);
                 })
                 .CancellableThrough(ct);
-
+ 
             var ok = await encodeArgs.ProcessAsynchronously(throwOnError: false);
-
+ 
             Log(ok ? "Encode complete — MP4 fully written."
                    : "Encode completed with FFmpeg warnings.");
-
+ 
             var total = Interlocked.Read(ref _droppedFramesTotal);
-            if (total > 0) Log($"Total frames dropped during capture: {total}");
+            if (total > 0) Log($"Total frames dropped by WinRT channel: {total}");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Log($"Encode error: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            // Чекаємо завершення pacer перед виходом
+            try { await pacerTask.ConfigureAwait(false); }
+            catch { }
         }
     }
 

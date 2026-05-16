@@ -11,9 +11,11 @@ public interface IScreenCaptureService
     Task StopAsync();
     Task<string?> TakeScreenshotAsync(string outputDir);
     BitmapSource? GetLatestFrameAsBitmap();
-
+ 
+    TimeSpan RecordingElapsed { get; }
+ 
     event EventHandler<string>?             StatusChanged;
-    event EventHandler?                     RecordingStarted;      
-    event EventHandler?                     CaptureTargetSelected; 
+    event EventHandler?                     RecordingStarted;
+    event EventHandler?                     CaptureTargetSelected;
     event EventHandler<DropStatsEventArgs>? DropStatsChanged;
 }

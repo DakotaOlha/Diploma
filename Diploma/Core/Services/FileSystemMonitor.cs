@@ -13,7 +13,7 @@ public class FileSystemMonitor : IDisposable
         ".js", ".ts", ".go", ".rs", ".kt", ".swift",
         ".txt", ".md", ".json", ".xml", ".yaml", ".yml"
     };
-
+    
     private readonly ILogService _logService;
     private readonly List<FileSystemWatcher> _watchers = new();
 
