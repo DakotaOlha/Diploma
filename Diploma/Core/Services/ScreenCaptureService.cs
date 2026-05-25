@@ -474,53 +474,54 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
         // Окрема черга між frame-pacer і FFmpeg pipe writer.
         // Wait (не DropOldest) — якщо FFmpeg відстає, pacer чекає,
         // але не пропускає кадри в timeline відео.
-        // Розмір: FPS * 2 секунди — достатній буфер для encoder spikes.
+        // Розмір: FPS * 4 секунди — буфер для encoder spikes.
         var encodeChannel = Channel.CreateBounded<TimestampedFrame>(
-            new BoundedChannelOptions(fixedFps * 2)
+            new BoundedChannelOptions(fixedFps * 4)
             {
                 FullMode     = BoundedChannelFullMode.Wait,
                 SingleWriter = true,
                 SingleReader = true,
             });
- 
-        // Frame pacer: окремий LongRunning thread.
+
+        // Frame pacer: окремий LongRunning thread з підвищеним пріоритетом.
         // Відповідальність: читати з _frameChannel і писати в encodeChannel
         // з точним timing (fixedFps). НЕ виконує IO до FFmpeg pipe.
         var pacerTask = Task.Factory.StartNew(() =>
         {
+            Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
             timeBeginPeriod(1);
- 
+
             long frameDurationTicks = Stopwatch.Frequency / fixedFps;
             long nextTick           = Stopwatch.GetTimestamp();
             TimestampedFrame? current = null;
- 
+
             try
             {
                 var reader = _frameChannel!.Reader;
- 
+
                 while (!ct.IsCancellationRequested)
                 {
                     // Виходимо якщо capture завершився і черга порожня
                     if (reader.Completion.IsCompleted && reader.Count == 0)
                         break;
- 
+
                     // Зчитуємо всі доступні кадри — беремо тільки найсвіжіший
                     while (reader.TryRead(out var candidate))
                     {
                         current?.Dispose();
                         current = candidate;
                     }
- 
+
                     long now  = Stopwatch.GetTimestamp();
                     long wait = nextTick - now;
- 
+
                     if (wait > 0)
                     {
                         // Гібридне очікування: Sleep для великих інтервалів + spin для точності
                         int sleepMs = (int)(wait * 1000L / Stopwatch.Frequency) - 1;
                         if (sleepMs > 1)
                             Thread.Sleep(sleepMs);
- 
+
                         // Spin-wait для останнього ~1ms без yield
                         while (Stopwatch.GetTimestamp() < nextTick)
                         {
@@ -530,30 +531,31 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                                 Thread.Sleep(0);
                         }
                     }
- 
+
                     // Рухаємо cursor вперед на один frame slot
                     nextTick += frameDurationTicks;
- 
-                    // Антидрейф: якщо накопичили борг більше 2 кадрів — скидаємо.
-                    // Це відбувається після довгого GC або OS scheduling jitter.
+
+                    // Захист від екстремального боргу: якщо pacer відстав більш ніж
+                    // на 5 секунд (наприклад, ОС зупинила потік на довгий час),
+                    // обмежуємо борг до 5 секунд — дозволяємо наздогнати поступово.
+                    // НЕ скидаємо до now — це б знищило реальний час запису.
                     now = Stopwatch.GetTimestamp();
-                    if (nextTick < now - frameDurationTicks * 2)
+                    long debtTicks = now - nextTick;
+                    if (debtTicks > Stopwatch.Frequency * 5)
                     {
-                        Log($"Pacer: clock drift detected, resetting. " +
-                            $"Debt={(now - nextTick) * 1000 / Stopwatch.Frequency}ms");
-                        nextTick = now;
+                        Log($"Pacer: extreme debt ({debtTicks * 1000 / Stopwatch.Frequency}ms) — capping to 5 s.");
+                        nextTick = now - Stopwatch.Frequency * 5;
                     }
- 
+
                     // Якщо кадру ще немає — чекаємо наступного slot без запису.
                     // FFmpeg отримає той самий кадр ще раз (freeze-frame) — це OK.
                     if (current == null) continue;
- 
+
                     // Записуємо в encodeChannel.
                     // Якщо channel повний (FFmpeg відстає) — чекаємо (Wait mode).
-                    // Використовуємо синхронний write через TryWrite з fallback.
+                    // Pacer природно наздоганяє після розблокування без скидання годинника.
                     if (!encodeChannel.Writer.TryWrite(current))
                     {
-                        // Channel тимчасово повний — робимо sync wait
                         encodeChannel.Writer.WriteAsync(current, ct)
                             .AsTask().GetAwaiter().GetResult();
                     }
@@ -571,7 +573,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                 timeEndPeriod(1);
                 Log("Frame pacer finished.");
             }
- 
+
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
  
         // FFmpeg frame source: читає з encodeChannel без будь-якого timing.
@@ -602,7 +604,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
         try
         {
             Log($"FFmpeg encode started ({width}×{height} @ {fixedFps} fps, " +
-                $"encodeBuffer={fixedFps * 2} frames)…");
+                $"encodeBuffer={fixedFps * 4} frames)…");
             var encoder = HardwareEncoderDetector.Detect();
  
             var encodeArgs = FFMpegArguments
@@ -648,8 +650,11 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
         switch (encoder)
         {
             case "libx264":
+                // ultrafast є обов'язковим для real-time запису — будь-який інший preset
+                // може бути повільнішим за реальний час і блокуватиме pacer.
+                // Якість контролюється через CRF, а не preset.
                 opts.WithConstantRateFactor(crf)
-                    .WithCustomArgument($"-preset {preset}")
+                    .WithCustomArgument("-preset ultrafast")
                     .WithCustomArgument("-tune zerolatency");
                 break;
 
