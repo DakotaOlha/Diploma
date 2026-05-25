@@ -505,18 +505,18 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                     if (reader.Completion.IsCompleted && reader.Count == 0)
                         break;
 
-                    // Зчитуємо всі доступні кадри — беремо тільки найсвіжіший
-                    while (reader.TryRead(out var candidate))
-                    {
-                        current?.Dispose();
-                        current = candidate;
-                    }
-
                     long now  = Stopwatch.GetTimestamp();
                     long wait = nextTick - now;
 
                     if (wait > 0)
                     {
+                        // ON SCHEDULE: читаємо всі доступні кадри перед сном — беремо найсвіжіший
+                        while (reader.TryRead(out var candidate))
+                        {
+                            current?.Dispose();
+                            current = candidate;
+                        }
+
                         // Гібридне очікування: Sleep для великих інтервалів + spin для точності
                         int sleepMs = (int)(wait * 1000L / Stopwatch.Frequency) - 1;
                         if (sleepMs > 1)
@@ -525,20 +525,34 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                         // Spin-wait для останнього ~1ms без yield
                         while (Stopwatch.GetTimestamp() < nextTick)
                         {
-                            // Якщо залишилось > 0.5ms — відпускаємо timeslice
-                            if (nextTick - Stopwatch.GetTimestamp() >
-                                Stopwatch.Frequency / 2000)
+                            if (nextTick - Stopwatch.GetTimestamp() > Stopwatch.Frequency / 2000)
                                 Thread.Sleep(0);
+                        }
+
+                        // Читаємо ще раз після сну — може з'явився ще свіжіший кадр
+                        while (reader.TryRead(out var candidate))
+                        {
+                            current?.Dispose();
+                            current = candidate;
+                        }
+                    }
+                    else
+                    {
+                        // CATCH-UP: читаємо рівно ОДИН кадр (FIFO).
+                        // Це рівномірно розподіляє накопичені кадри по ітераціях замість
+                        // того, щоб дренувати всі в одній ітерації і залишати наступні
+                        // порожніми — що призводило б до пропуску frame slot'ів.
+                        if (reader.TryRead(out var candidate))
+                        {
+                            current?.Dispose();
+                            current = candidate;
                         }
                     }
 
                     // Рухаємо cursor вперед на один frame slot
                     nextTick += frameDurationTicks;
 
-                    // Захист від екстремального боргу: якщо pacer відстав більш ніж
-                    // на 5 секунд (наприклад, ОС зупинила потік на довгий час),
-                    // обмежуємо борг до 5 секунд — дозволяємо наздогнати поступово.
-                    // НЕ скидаємо до now — це б знищило реальний час запису.
+                    // Захист від екстремального боргу (> 5 с) — обмежуємо без скидання до now.
                     now = Stopwatch.GetTimestamp();
                     long debtTicks = now - nextTick;
                     if (debtTicks > Stopwatch.Frequency * 5)
@@ -547,19 +561,14 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                         nextTick = now - Stopwatch.Frequency * 5;
                     }
 
-                    // Якщо кадру ще немає — чекаємо наступного slot без запису.
-                    // FFmpeg отримає той самий кадр ще раз (freeze-frame) — це OK.
+                    // Якщо кадру немає — freeze (FFmpeg повторить попередній кадр).
                     if (current == null) continue;
 
-                    // Записуємо в encodeChannel.
-                    // Якщо channel повний (FFmpeg відстає) — чекаємо (Wait mode).
-                    // Pacer природно наздоганяє після розблокування без скидання годинника.
                     if (!encodeChannel.Writer.TryWrite(current))
                     {
                         encodeChannel.Writer.WriteAsync(current, ct)
                             .AsTask().GetAwaiter().GetResult();
                     }
-                    // Передаємо ownership у channel — НЕ dispose в наступній ітерації
                     current = null;
                 }
             }
