@@ -37,6 +37,7 @@ public partial class App : Application
                 dbInit.Initialize();
 
                 services.AddSingleton<ILogService>(_ => new LogService(connStr));
+                services.AddSingleton<ISettingsService>(_ => new AppSettingsService(connStr));
                 services.AddSingleton<IInputMonitorService, InputMonitorService>();
                 services.AddSingleton<IAudioCaptureService,  AudioCaptureService>();
                 services.AddSingleton<IScreenCaptureService, ScreenCaptureService>();
@@ -50,12 +51,19 @@ public partial class App : Application
                 services.AddSingleton<SessionsView>();
                 services.AddSingleton<PlayerViewModel>();
                 services.AddSingleton<PlayerView>();
+                services.AddSingleton<SettingsViewModel>();
+                services.AddSingleton<SettingsView>();
                 services.AddSingleton<OverlayWindow>();
                 services.AddSingleton<MainWindow>();
             })
             .Build();
 
         await _host.StartAsync();
+
+        var settingsService = _host.Services.GetRequiredService<ISettingsService>();
+        await settingsService.LoadAsync();
+        settingsService.ApplyToProfileService(
+            _host.Services.GetRequiredService<ModeProfileService>());
 
         _trayIcon = BuildTrayIcon();
 

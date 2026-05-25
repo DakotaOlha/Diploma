@@ -14,7 +14,9 @@ public partial class MainWindow : Window
         MainViewModel     viewModel,
         SessionsView      sessionsView,
         PlayerView        playerView,
-        SessionsViewModel sessionsViewModel)
+        SessionsViewModel sessionsViewModel,
+        SettingsView      settingsView,
+        SettingsViewModel settingsViewModel)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -23,9 +25,18 @@ public partial class MainWindow : Window
         SessionsTab.Content = sessionsView;
         PlayerTab.Content   = playerView;
 
+        settingsView.DataContext = settingsViewModel;
+        SettingsTab.Content      = settingsView;
+
+        settingsView.IsVisibleChanged += (_, e) =>
+        {
+            if ((bool)e.NewValue)
+                settingsViewModel.Reload();
+        };
+
         sessionsViewModel.NavigateToPlayer += () =>
             PlayerTab.IsSelected = true;
-        
+
         StateChanged += MainWindow_StateChanged;
     }
     

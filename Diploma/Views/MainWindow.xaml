@@ -587,6 +587,8 @@
                 <TabItem Header="📋 Сесії" x:Name="SessionsTab"/>
 
                 <TabItem Header="▶ Плеєр" x:Name="PlayerTab"/>
+
+                <TabItem Header="⚙ Налаштування" x:Name="SettingsTab"/>
             </TabControl>
         </Grid>
     </Border>
