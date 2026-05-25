@@ -340,68 +340,6 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- Вибір режиму -->
-                            <Border Background="#1A2D4C4F" 
-                                    CornerRadius="8" 
-                                    Padding="16,12"
-                                    Margin="0,0,0,8"
-                                    BorderBrush="#2D4C4F" 
-                                    BorderThickness="1">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal"
-                                                HorizontalAlignment="Center"
-                                                Margin="0,0,0,4">
-                                        <TextBlock Text="Режим:"
-                                                   VerticalAlignment="Center"
-                                                   Margin="0,0,12,0"
-                                                   Foreground="#78B4B7"
-                                                   FontWeight="Medium"/>
-                                        <ComboBox Style="{StaticResource CustomComboBoxStyle}"
-                                                  ItemsSource="{Binding AvailableModes}"
-                                                  SelectedItem="{Binding SelectedMode}"
-                                                  DisplayMemberPath="DisplayName"
-                                                  Width="240"
-                                                  IsEnabled="{Binding CanSelectMode}"
-                                                  Tag="Оберіть режим"/>
-                                    </StackPanel>
-
-                                    <TextBlock Text="{Binding SelectedMode.Description}"
-                                               HorizontalAlignment="Center"
-                                               Foreground="#99D9E9E9"
-                                               FontSize="11"
-                                               Margin="0,4,0,0"
-                                               TextWrapping="Wrap"
-                                               MaxWidth="460"/>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- Якість запису -->
-                            <Border Background="#1A2D4C4F" 
-                                    CornerRadius="8" 
-                                    Padding="16,12"
-                                    Margin="0,0,0,8"
-                                    BorderBrush="#2D4C4F" 
-                                    BorderThickness="1">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal"
-                                                HorizontalAlignment="Center"
-                                                Margin="0,0,0,4">
-                                        <TextBlock Text="Якість:"
-                                                   VerticalAlignment="Center"
-                                                   Margin="0,0,12,0"
-                                                   Foreground="#78B4B7"
-                                                   FontWeight="Medium"/>
-                                        <ComboBox Style="{StaticResource CustomComboBoxStyle}"
-                                                  ItemsSource="{Binding AvailableQualities}"
-                                                  SelectedItem="{Binding SelectedQuality}"
-                                                  DisplayMemberPath="Label"
-                                                  Width="240"
-                                                  IsEnabled="{Binding CanSelectQuality}"
-                                                  Tag="Оберіть якість"/>
-                                    </StackPanel>
-                                </StackPanel>
-                            </Border>
-
                             <!-- Кнопки керування -->
                             <StackPanel Orientation="Horizontal" 
                                         HorizontalAlignment="Center"

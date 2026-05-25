@@ -245,15 +245,15 @@
                                Foreground="#78B4B7"
                                Margin="0,0,0,12"/>
 
-                    <!-- AlgoReplay -->
-                    <TextBlock Text="AlgoReplay"
+                    <!-- AlgoReplay — глобальні -->
+                    <TextBlock Text="AlgoReplay — глобальні"
                                FontSize="12" FontWeight="SemiBold"
                                Foreground="#99D9E9E9"
                                Margin="0,0,0,6"/>
-                    <Border Background="#102020" CornerRadius="6" Padding="12,8" Margin="0,0,0,12">
+                    <Border Background="#102020" CornerRadius="6" Padding="12,8" Margin="0,0,0,16">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="170"/>
+                                <ColumnDefinition Width="160"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -261,6 +261,7 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
+
                             <Border Grid.Row="0" Grid.Column="0" Background="#1A78B4B7" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
                                 <TextBlock Text="Ctrl + Shift + R" FontFamily="Consolas" FontSize="12" Foreground="#78B4B7"/>
                             </Border>
@@ -278,89 +279,91 @@
                         </Grid>
                     </Border>
 
-                    <!-- IDE / Editor -->
-                    <TextBlock Text="Редактор / IDE"
-                               FontSize="12" FontWeight="SemiBold"
-                               Foreground="#99D9E9E9"
-                               Margin="0,0,0,6"/>
-                    <Border Background="#102020" CornerRadius="6" Padding="12,8" Margin="0,0,0,12">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="170"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-
-                            <Border Grid.Row="0" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
-                                <TextBlock Text="Ctrl + S" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
-                            </Border>
-                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Зберегти файл" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
-
-                            <Border Grid.Row="1" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
-                                <TextBlock Text="Ctrl + Z / Y" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
-                            </Border>
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Відміна / Повтор" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
-
-                            <Border Grid.Row="2" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
-                                <TextBlock Text="Ctrl + C / V / X" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
-                            </Border>
-                            <TextBlock Grid.Row="2" Grid.Column="1" Text="Копіювати / Вставити / Вирізати" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
-
-                            <Border Grid.Row="3" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
-                                <TextBlock Text="F5 / Ctrl + F5" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
-                            </Border>
-                            <TextBlock Grid.Row="3" Grid.Column="1" Text="Запустити / Запустити без відладки" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
-
-                            <Border Grid.Row="4" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
-                                <TextBlock Text="F9 / F10 / F11" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
-                            </Border>
-                            <TextBlock Grid.Row="4" Grid.Column="1" Text="Breakpoint / Step Over / Step Into" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
-
-                            <Border Grid.Row="5" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
-                                <TextBlock Text="Ctrl + Space" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
-                            </Border>
-                            <TextBlock Grid.Row="5" Grid.Column="1" Text="Автодоповнення (IntelliSense)" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
-                        </Grid>
-                    </Border>
-
-                    <!-- Windows -->
-                    <TextBlock Text="Windows"
+                    <!-- Редактор скріншотів -->
+                    <TextBlock Text="Редактор скріншотів"
                                FontSize="12" FontWeight="SemiBold"
                                Foreground="#99D9E9E9"
                                Margin="0,0,0,6"/>
                     <Border Background="#102020" CornerRadius="6" Padding="12,8">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="170"/>
+                                <ColumnDefinition Width="160"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
                             <Border Grid.Row="0" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
-                                <TextBlock Text="Win + D" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                                <TextBlock Text="S" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
                             </Border>
-                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Показати робочий стіл" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Виділення та переміщення" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
 
                             <Border Grid.Row="1" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
-                                <TextBlock Text="Alt + Tab" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                                <TextBlock Text="A" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
                             </Border>
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Переключення між вікнами" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Стрілка" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
 
                             <Border Grid.Row="2" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
-                                <TextBlock Text="Win + V" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                                <TextBlock Text="R" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
                             </Border>
-                            <TextBlock Grid.Row="2" Grid.Column="1" Text="Історія буфера обміну" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="Прямокутник" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="3" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="P" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="Олівець (вільний)" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="4" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="T" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="Текст" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="5" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="M" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="5" Grid.Column="1" Text="Маркер (виділення кольором)" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="6" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="E" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="6" Grid.Column="1" Text="Гумка" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="7" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Ctrl + Z" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="7" Grid.Column="1" Text="Відміна останньої дії" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="8" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Ctrl + S" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="8" Grid.Column="1" Text="Зберегти скріншот" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="9" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Ctrl + Enter" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="9" Grid.Column="1" Text="Підтвердити введення тексту" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="10" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Delete" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="10" Grid.Column="1" Text="Видалити виділений елемент" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="11" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Ctrl + Scroll" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="11" Grid.Column="1" Text="Змінити розмір пензля" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
                         </Grid>
                     </Border>
                 </StackPanel>
