@@ -1,6 +1,8 @@
 ﻿using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using Diploma.ViewModels;
 
 namespace Diploma.Views;
@@ -9,6 +11,56 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
     private bool _isShutdownConfirmed;
+
+    // ── WM_GETMINMAXINFO hook — ensures maximized window respects taskbar ──
+
+    private const int WM_GETMINMAXINFO = 0x0024;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X, Y; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MINMAXINFO
+    {
+        public POINT ptReserved;
+        public POINT ptMaxSize;
+        public POINT ptMaxPosition;
+        public POINT ptMinTrackSize;
+        public POINT ptMaxTrackSize;
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        if (PresentationSource.FromVisual(this) is HwndSource src)
+            src.AddHook(WndProc);
+    }
+
+    private static IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam,
+                                  ref bool handled)
+    {
+        if (msg == WM_GETMINMAXINFO)
+        {
+            ApplyWorkAreaConstraints(hwnd, lParam);
+            handled = true;
+        }
+        return IntPtr.Zero;
+    }
+
+    private static void ApplyWorkAreaConstraints(IntPtr hwnd, IntPtr lParam)
+    {
+        var mmi    = Marshal.PtrToStructure<MINMAXINFO>(lParam);
+        var screen = System.Windows.Forms.Screen.FromHandle(hwnd);
+        var wa     = screen.WorkingArea;
+        var full   = screen.Bounds;
+
+        mmi.ptMaxPosition.X = wa.Left - full.Left;
+        mmi.ptMaxPosition.Y = wa.Top  - full.Top;
+        mmi.ptMaxSize.X     = wa.Width;
+        mmi.ptMaxSize.Y     = wa.Height;
+
+        Marshal.StructureToPtr(mmi, lParam, true);
+    }
 
     public MainWindow(
         MainViewModel     viewModel,
