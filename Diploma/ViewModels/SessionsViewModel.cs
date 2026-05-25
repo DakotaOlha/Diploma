@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using Diploma.Core.Interfaces;
 using Diploma.Core.Models;
 using Diploma.Core.Services;
+using Diploma.Views;
 
 namespace Diploma.ViewModels;
 
@@ -155,6 +156,32 @@ public partial class SessionsViewModel : ObservableObject
 
         foreach (var e in filtered)
             Entries.Add(e);
+    }
+
+    [RelayCommand]
+    private async Task RenameSessionAsync(RecordingSession? session)
+    {
+        if (session is null) return;
+
+        var dialog = new RenameDialog(session.Name);
+        if (dialog.ShowDialog() != true) return;
+
+        var savedId = session.Id;
+        await _logService.UpdateSessionNameAsync(savedId, dialog.NewName);
+
+        // Оновлюємо список в пам'яті без зміни SelectedSession
+        var allSessions = await _logService.GetAllSessionsAsync();
+
+        var currentSelectedId = SelectedSession?.Id;
+        Sessions.Clear();
+        foreach (var s in allSessions)
+            Sessions.Add(s);
+
+        // Відновлюємо вибір на перейменовану сесію (або на попередньо вибрану)
+        var updated = Sessions.FirstOrDefault(s => s.Id == savedId)
+                   ?? Sessions.FirstOrDefault(s => s.Id == currentSelectedId);
+
+        SelectedSession = updated ?? Sessions.FirstOrDefault();
     }
 
     [RelayCommand]

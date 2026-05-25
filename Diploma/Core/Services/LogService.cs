@@ -190,6 +190,32 @@ public class LogService : ILogService, IAsyncDisposable
         });
     }
 
+    public async Task UpdateSessionNameAsync(int sessionId, string name)
+    {
+        const string sql = "UPDATE RecordingSessions SET Name = @Name WHERE Id = @Id";
+
+        await using var conn = CreateConnection();
+        await conn.ExecuteAsync(sql, new { Name = name, Id = sessionId });
+    }
+
+    public Task LogEventAtAsync(int sessionId, string eventType,
+        string description, string? metadata, DateTime atUtc)
+    {
+        if (_disposed) return Task.CompletedTask;
+
+        var offset = _sessionStarts.TryGetValue(sessionId, out var start)
+            ? (atUtc - start).TotalSeconds
+            : 0.0;
+
+        _pending.Enqueue(new PendingEvent(
+            sessionId, atUtc, offset, eventType, description, metadata));
+
+        if (ImmediateFlushTypes.Contains(eventType))
+            _ = FlushAsync();
+
+        return Task.CompletedTask;
+    }
+
     private async Task FlushAsync()
     {
         if (_disposed && _pending.IsEmpty) return;
@@ -240,8 +266,7 @@ public class LogService : ILogService, IAsyncDisposable
         }
         finally
         {
-            if (!_disposed)
-                _flushGate.Release();
+            _flushGate.Release();
         }
     }
 
