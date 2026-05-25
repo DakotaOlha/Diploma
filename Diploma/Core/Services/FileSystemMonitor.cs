@@ -33,16 +33,19 @@ public class FileSystemMonitor : IDisposable
         _logService = logService;
     }
 
-    public void Start(int sessionId, IEnumerable<string> watchPaths)
+    public void Start(int sessionId, IEnumerable<string>? watchPaths = null)
     {
         if (_isRunning) return;
         _sessionId = sessionId;
         _isRunning = true;
 
-        foreach (var path in watchPaths)
+        if (watchPaths is not null)
         {
-            if (!Directory.Exists(path)) continue;
-            AddWatcher(path);
+            foreach (var path in watchPaths)
+            {
+                if (!Directory.Exists(path)) continue;
+                AddWatcher(path);
+            }
         }
 
         _cleanupTimer = new Timer(

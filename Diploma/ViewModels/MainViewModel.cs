@@ -395,6 +395,9 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        // Фіксуємо час ДО діалогу, щоб offset маркера відповідав відео
+        var capturedAt = DateTime.UtcNow;
+
         var dir           = Path.GetDirectoryName(_currentVideoPath)!;
         var screenshotDir = Path.Combine(dir, "screenshots");
         Directory.CreateDirectory(screenshotDir);
@@ -410,11 +413,12 @@ public partial class MainViewModel : ObservableObject
 
         if (File.Exists(outputPath))
         {
-            await _logService.LogEventAsync(
+            await _logService.LogEventAtAsync(
                 _currentSessionId,
                 EventTypes.Screenshot,
                 $"Скріншот: {Path.GetFileName(outputPath)}",
-                metadata: outputPath);
+                metadata: outputPath,
+                atUtc: capturedAt);
 
             StatusText = "Скріншот збережено";
         }
