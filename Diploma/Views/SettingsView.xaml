@@ -1,0 +1,386 @@
+<UserControl x:Class="Diploma.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#102020">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="24,16,24,24"
+                    MaxWidth="520"
+                    HorizontalAlignment="Center">
+
+            <!-- ═══ Загальні налаштування ═══ -->
+            <Border Background="#1A2D4C4F"
+                    CornerRadius="12"
+                    Padding="20,16"
+                    Margin="0,0,0,12"
+                    BorderBrush="#2D4C4F"
+                    BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="⚙  Загальні налаштування"
+                               FontSize="14" FontWeight="SemiBold"
+                               Foreground="#78B4B7"
+                               Margin="0,0,0,14"/>
+
+                    <!-- Якість за замовчуванням -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="170"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Якість за замовчуванням:"
+                                   VerticalAlignment="Center"
+                                   Foreground="#99D9E9E9"
+                                   FontSize="13"/>
+                        <ComboBox Grid.Column="1"
+                                  Style="{StaticResource CustomComboBoxStyle}"
+                                  ItemsSource="{Binding AvailableQualities}"
+                                  SelectedItem="{Binding DefaultQuality}"
+                                  DisplayMemberPath="Label"/>
+                    </Grid>
+
+                    <!-- Режим за замовчуванням -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="170"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Режим за замовчуванням:"
+                                   VerticalAlignment="Center"
+                                   Foreground="#99D9E9E9"
+                                   FontSize="13"/>
+                        <ComboBox Grid.Column="1"
+                                  Style="{StaticResource CustomComboBoxStyle}"
+                                  ItemsSource="{Binding AvailableModes}"
+                                  SelectedItem="{Binding DefaultMode}"
+                                  DisplayMemberPath="DisplayName"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ Налаштування логування ═══ -->
+            <Border Background="#1A2D4C4F"
+                    CornerRadius="12"
+                    Padding="20,16"
+                    Margin="0,0,0,12"
+                    BorderBrush="#2D4C4F"
+                    BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="📋  Налаштування логування подій"
+                               FontSize="14" FontWeight="SemiBold"
+                               Foreground="#78B4B7"
+                               Margin="0,0,0,4"/>
+                    <TextBlock Text="Оберіть, які події записуватимуться для кожного режиму."
+                               FontSize="11"
+                               Foreground="#667D8A"
+                               Margin="0,0,0,14"/>
+
+                    <!-- ─── Olympic (fixed) ─── -->
+                    <Border Background="#0D102020"
+                            CornerRadius="8"
+                            Padding="14,10"
+                            Margin="0,0,0,8"
+                            BorderBrush="#2D4C4F"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="🏆  Олімпіада"
+                                           FontSize="13" FontWeight="SemiBold"
+                                           Foreground="#BD8B33"/>
+                                <TextBlock Text="  — фіксований режим"
+                                           FontSize="11"
+                                           Foreground="#667D8A"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <TextBlock Text="Буфер обміну  •  Збереження файлу  •  Запуск/налагодження  •  Бездіяльність  •  Маркери  •  Скріншоти"
+                                       FontSize="11"
+                                       Foreground="#667D8A"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ─── Learning ─── -->
+                    <Border Background="#0D1A2D4C"
+                            CornerRadius="8"
+                            Padding="14,12"
+                            Margin="0,0,0,8"
+                            BorderBrush="#2D4C4F"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="📚  Навчання"
+                                       FontSize="13" FontWeight="SemiBold"
+                                       Foreground="#78B4B7"
+                                       Margin="0,0,0,10"/>
+                            <UniformGrid Columns="2" Margin="0,0,0,4">
+                                <CheckBox Content="Буфер обміну (Copy/Paste)"
+                                          IsChecked="{Binding LearningClipboard}"
+                                          Margin="0,3"/>
+                                <CheckBox Content="Збереження файлу"
+                                          IsChecked="{Binding LearningFileSave}"
+                                          Margin="0,3"/>
+                                <CheckBox Content="Відміна (Undo)"
+                                          IsChecked="{Binding LearningUndo}"
+                                          Margin="0,3"/>
+                                <CheckBox Content="Запуск / налагодження"
+                                          IsChecked="{Binding LearningRunDebug}"
+                                          Margin="0,3"/>
+                                <CheckBox Content="Бездіяльність"
+                                          IsChecked="{Binding LearningIdle}"
+                                          Margin="0,3"/>
+                            </UniformGrid>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <CheckBox Content="Маркери"
+                                          IsChecked="True" IsEnabled="False"
+                                          Opacity="0.5" Margin="0,0,16,0"/>
+                                <CheckBox Content="Скріншоти"
+                                          IsChecked="True" IsEnabled="False"
+                                          Opacity="0.5"/>
+                                <TextBlock Text="  (завжди активні)"
+                                           FontSize="11" Foreground="#667D8A"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ─── Work ─── -->
+                    <Border Background="#0D1A2D4C"
+                            CornerRadius="8"
+                            Padding="14,12"
+                            Margin="0,0,0,8"
+                            BorderBrush="#2D4C4F"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="💼  Робота"
+                                       FontSize="13" FontWeight="SemiBold"
+                                       Foreground="#78B4B7"
+                                       Margin="0,0,0,10"/>
+                            <UniformGrid Columns="2" Margin="0,0,0,4">
+                                <CheckBox Content="Буфер обміну (Copy/Paste)"
+                                          IsChecked="{Binding WorkClipboard}"
+                                          Margin="0,3"/>
+                                <CheckBox Content="Збереження файлу"
+                                          IsChecked="{Binding WorkFileSave}"
+                                          Margin="0,3"/>
+                                <CheckBox Content="Запуск / налагодження"
+                                          IsChecked="{Binding WorkRunDebug}"
+                                          Margin="0,3"/>
+                                <CheckBox Content="Бездіяльність"
+                                          IsChecked="{Binding WorkIdle}"
+                                          Margin="0,3"/>
+                            </UniformGrid>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <CheckBox Content="Маркери"
+                                          IsChecked="True" IsEnabled="False"
+                                          Opacity="0.5" Margin="0,0,16,0"/>
+                                <CheckBox Content="Скріншоти"
+                                          IsChecked="True" IsEnabled="False"
+                                          Opacity="0.5"/>
+                                <TextBlock Text="  (завжди активні)"
+                                           FontSize="11" Foreground="#667D8A"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ─── Personal ─── -->
+                    <Border Background="#0D1A2D4C"
+                            CornerRadius="8"
+                            Padding="14,12"
+                            BorderBrush="#2D4C4F"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="🙂  Особистий"
+                                       FontSize="13" FontWeight="SemiBold"
+                                       Foreground="#78B4B7"
+                                       Margin="0,0,0,10"/>
+                            <UniformGrid Columns="2" Margin="0,0,0,4">
+                                <CheckBox Content="Буфер обміну (Copy/Paste)"
+                                          IsChecked="{Binding PersonalClipboard}"
+                                          Margin="0,3"/>
+                                <CheckBox Content="Збереження файлу"
+                                          IsChecked="{Binding PersonalFileSave}"
+                                          Margin="0,3"/>
+                                <CheckBox Content="Запуск / налагодження"
+                                          IsChecked="{Binding PersonalRunDebug}"
+                                          Margin="0,3"/>
+                                <CheckBox Content="Бездіяльність"
+                                          IsChecked="{Binding PersonalIdle}"
+                                          Margin="0,3"/>
+                                <CheckBox Content="Відкриття/закриття IDE"
+                                          IsChecked="{Binding PersonalIde}"
+                                          Margin="0,3"/>
+                                <CheckBox Content="Перемикання файлів"
+                                          IsChecked="{Binding PersonalFileSwitch}"
+                                          Margin="0,3"/>
+                                <CheckBox Content="Автозбереження"
+                                          IsChecked="{Binding PersonalAutoSave}"
+                                          Margin="0,3"/>
+                            </UniformGrid>
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <CheckBox Content="Маркери"
+                                          IsChecked="True" IsEnabled="False"
+                                          Opacity="0.5" Margin="0,0,16,0"/>
+                                <CheckBox Content="Скріншоти"
+                                          IsChecked="True" IsEnabled="False"
+                                          Opacity="0.5"/>
+                                <TextBlock Text="  (завжди активні)"
+                                           FontSize="11" Foreground="#667D8A"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ Гарячі клавіші ═══ -->
+            <Border Background="#1A2D4C4F"
+                    CornerRadius="12"
+                    Padding="20,16"
+                    Margin="0,0,0,16"
+                    BorderBrush="#2D4C4F"
+                    BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="⌨  Гарячі клавіші"
+                               FontSize="14" FontWeight="SemiBold"
+                               Foreground="#78B4B7"
+                               Margin="0,0,0,12"/>
+
+                    <!-- AlgoReplay -->
+                    <TextBlock Text="AlgoReplay"
+                               FontSize="12" FontWeight="SemiBold"
+                               Foreground="#99D9E9E9"
+                               Margin="0,0,0,6"/>
+                    <Border Background="#102020" CornerRadius="6" Padding="12,8" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Grid.Column="0" Background="#1A78B4B7" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Ctrl + Shift + R" FontFamily="Consolas" FontSize="12" Foreground="#78B4B7"/>
+                            </Border>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Старт / Стоп запису" VerticalAlignment="Center" Margin="0,2" Foreground="#D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="1" Grid.Column="0" Background="#1A78B4B7" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Ctrl + Shift + M" FontFamily="Consolas" FontSize="12" Foreground="#78B4B7"/>
+                            </Border>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Додати маркер" VerticalAlignment="Center" Margin="0,2" Foreground="#D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="2" Grid.Column="0" Background="#1A78B4B7" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Ctrl + Shift + S" FontFamily="Consolas" FontSize="12" Foreground="#78B4B7"/>
+                            </Border>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="Зробити скріншот" VerticalAlignment="Center" Margin="0,2" Foreground="#D9E9E9" FontSize="13"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- IDE / Editor -->
+                    <TextBlock Text="Редактор / IDE"
+                               FontSize="12" FontWeight="SemiBold"
+                               Foreground="#99D9E9E9"
+                               Margin="0,0,0,6"/>
+                    <Border Background="#102020" CornerRadius="6" Padding="12,8" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Ctrl + S" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Зберегти файл" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="1" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Ctrl + Z / Y" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Відміна / Повтор" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="2" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Ctrl + C / V / X" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="Копіювати / Вставити / Вирізати" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="3" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="F5 / Ctrl + F5" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="Запустити / Запустити без відладки" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="4" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="F9 / F10 / F11" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="Breakpoint / Step Over / Step Into" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="5" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Ctrl + Space" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="5" Grid.Column="1" Text="Автодоповнення (IntelliSense)" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Windows -->
+                    <TextBlock Text="Windows"
+                               FontSize="12" FontWeight="SemiBold"
+                               Foreground="#99D9E9E9"
+                               Margin="0,0,0,6"/>
+                    <Border Background="#102020" CornerRadius="6" Padding="12,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Win + D" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Показати робочий стіл" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="1" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Alt + Tab" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Переключення між вікнами" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+
+                            <Border Grid.Row="2" Grid.Column="0" Background="#1A2D4C4F" CornerRadius="4" Padding="6,3" Margin="0,2,8,2" HorizontalAlignment="Left">
+                                <TextBlock Text="Win + V" FontFamily="Consolas" FontSize="12" Foreground="#99D9E9E9"/>
+                            </Border>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="Історія буфера обміну" VerticalAlignment="Center" Margin="0,2" Foreground="#99D9E9E9" FontSize="13"/>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ Кнопка збереження ═══ -->
+            <Button Content="💾  Зберегти налаштування"
+                    Command="{Binding SaveSettingsCommand}"
+                    Height="42"
+                    FontSize="14"
+                    Background="#2D4C4F"
+                    BorderBrush="#78B4B7"/>
+
+            <TextBlock Text="{Binding SaveStatus}"
+                       HorizontalAlignment="Center"
+                       Foreground="#78B4B7"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       Margin="0,8,0,0"/>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

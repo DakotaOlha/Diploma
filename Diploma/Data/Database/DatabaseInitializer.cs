@@ -12,6 +12,7 @@ public class DatabaseInitializer
     private static readonly IMigration[] Migrations =
     [
         new Migration_001_InitialSchema(),
+        new Migration_002_AppSettings(),
     ];
 
     public DatabaseInitializer(string connectionString)
