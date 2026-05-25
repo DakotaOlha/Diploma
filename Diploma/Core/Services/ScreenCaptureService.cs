@@ -515,7 +515,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
         DiagEvent("  ARR    = WinRT frames captured");
         DiagEvent("  DROP   = dropped at capture channel (pacer too slow)");
         DiagEvent("  SENT   = frames written to FFmpeg");
-        DiagEvent("  FREEZE = frame slots with no new content (duplicate sent)");
+        DiagEvent("  FREEZE = slots where last frame was re-sent (static screen or OS stall)");
         DiagEvent("  ONTIME = pacer iterations that slept (on schedule)");
         DiagEvent("  CATCHUP= pacer iterations that ran without sleep (behind)");
         DiagEvent("  BKPRS  = times FFmpeg encode channel was full (backpressure)");
@@ -599,7 +599,8 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
             long frameDurationTicks = Stopwatch.Frequency / fixedFps;
             long nextTick           = Stopwatch.GetTimestamp();
-            TimestampedFrame? current = null;
+            TimestampedFrame? current   = null;
+            TimestampedFrame? freezeRef = null; // last-sent frame, re-used as freeze content
 
             try
             {
@@ -680,9 +681,17 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
                     if (current == null)
                     {
-                        Interlocked.Increment(ref _diagFreezeFrames);
-                        continue;
+                        if (freezeRef == null)
+                        {
+                            // No frame ever received — nothing to repeat yet, skip slot
+                            continue;
+                        }
+                        // WinRT delivered no new frame (static screen or OS stall).
+                        // Re-send last known frame to keep video duration correct.
+                        current = freezeRef;
                     }
+
+                    bool isFreeze = ReferenceEquals(current, freezeRef);
 
                     if (!encodeChannel.Writer.TryWrite(current))
                     {
@@ -691,6 +700,16 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                         encodeChannel.Writer.WriteAsync(current, ct).AsTask().GetAwaiter().GetResult();
                     }
                     Interlocked.Increment(ref _diagFramesSent);
+
+                    if (isFreeze)
+                    {
+                        Interlocked.Increment(ref _diagFreezeFrames);
+                        // Keep freezeRef for next iteration — don't null it via current
+                    }
+                    else
+                    {
+                        freezeRef = current; // Update last-sent frame for future freeze slots
+                    }
                     current = null;
                 }
             }
@@ -782,7 +801,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
             DiagEvent($"Lost frame slots:              {expected - totSent}  ({lostPct:F1}%)");
             DiagEvent($"WinRT frames arrived:          {totArr}");
             DiagEvent($"WinRT frames dropped (chan):   {totDrop}");
-            DiagEvent($"Freeze frames (dup written):   {totFreeze}");
+            DiagEvent($"Freeze frames sent (repeat):   {totFreeze}  (static screen / OS stall)");
             DiagEvent($"Pacer on-schedule iterations:  {totOn}");
             DiagEvent($"Pacer catch-up iterations:     {totCu}");
             DiagEvent($"FFmpeg backpressure events:    {totBp}");
