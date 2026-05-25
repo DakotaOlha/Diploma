@@ -414,7 +414,7 @@
       <!-- Divider -->
       <line x1="820" y1="294" x2="1540" y2="294" stroke="#2D4C4F" stroke-width="1"/>
 
-      <!-- ---- Row 1: Quality ---- -->
+      <!-- Row 1: Quality -->
       <g id="f3-quality-row">
         <!-- Left label -->
         <text x="844" y="330" font-size="13" font-weight="500" fill="#D9E9E9">Якість за замовчуванням</text>
@@ -429,7 +429,7 @@
         <line x1="844" y1="362" x2="1524" y2="362" stroke="#2D4C4F" stroke-width="1" opacity="0.6"/>
       </g>
 
-      <!-- ---- Row 2: Mode ---- -->
+      <!-- Row 2: Mode -->
       <g id="f3-mode-row">
         <text x="844" y="394" font-size="13" font-weight="500" fill="#D9E9E9">Режим за замовчуванням</text>
         <text x="844" y="411" font-size="11" fill="#8BA8AA">Вибирається при запуску</text>
@@ -440,11 +440,11 @@
         <use href="#icon-chevron-down" x="1497" y="389" width="12" height="12"/>
       </g>
 
-      <!-- ---- Section Header: Logging ---- -->
+      <!-- Section Header: Logging -->
       <text x="844" y="442" font-size="10" font-weight="600" fill="#506870" letter-spacing="1.5">НАЛАШТУВАННЯ ЛОГУВАННЯ</text>
       <line x1="844" y1="452" x2="1524" y2="452" stroke="#2D4C4F" stroke-width="1" opacity="0.5"/>
 
-      <!-- ---- Mode Cards (3 cards) ---- -->
+      <!-- Mode Cards (3 cards) -->
       <!-- Card 1: Olympic -->
       <g id="f3-card-olympic">
         <rect x="844" y="460" width="210" height="204" rx="10" fill="#0D1F1F" stroke="#2D4C4F" stroke-width="1"/>
@@ -511,7 +511,7 @@
         <text x="1314" y="648" font-size="10" fill="#506870">+ Маркери · Скріншоти</text>
       </g>
 
-      <!-- ---- Save Button ---- -->
+      <!-- Save Button -->
       <g id="f3-save-button">
         <rect x="844" y="678" width="658" height="44" rx="10" fill="#1E3636" stroke="#78B4B7" stroke-width="1.5"/>
         <text x="1173" y="705" text-anchor="middle" font-size="14" font-weight="700" fill="#78B4B7">💾 Зберегти налаштування</text>
