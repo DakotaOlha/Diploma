@@ -1,4 +1,5 @@
 ﻿using System.Buffers;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -174,6 +175,16 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
     private long _droppedFramesTotal;
 
+    // Diagnostic counters — reset at each recording start, flushed to _diag.txt
+    private long _diagFramesArrived;
+    private long _diagFreezeFrames;
+    private long _diagCatchUpIter;
+    private long _diagOnSchedIter;
+    private long _diagBackpressure;
+    private long _diagFramesSent;
+    private long _diagSleepOverruns;
+    private long _diagMaxDebtMs;
+
     private readonly object   _logLock = new();
     private readonly string[] _logRing = new string[LogRingCapacity];
     private int               _logHead;
@@ -241,7 +252,15 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
             _winrtDevice  = winrtDevice;
             _frameChannel = channel;
 
-            _droppedFramesTotal    = 0;
+            _droppedFramesTotal = 0;
+            _diagFramesArrived  = 0;
+            _diagFreezeFrames   = 0;
+            _diagCatchUpIter    = 0;
+            _diagOnSchedIter    = 0;
+            _diagBackpressure   = 0;
+            _diagFramesSent     = 0;
+            _diagSleepOverruns  = 0;
+            _diagMaxDebtMs      = 0;
 
             Log($"Prepared — quality={_quality.Label}");
             CaptureTargetSelected?.Invoke(this, EventArgs.Empty);
@@ -410,6 +429,8 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                     var tsFrame = new TimestampedFrame(
                         bytes, encodeWidth, encodeHeight, ts, pooled: true);
 
+                    Interlocked.Increment(ref _diagFramesArrived);
+
                     if (!writer.TryWrite(tsFrame))
                     {
                         Interlocked.Increment(ref _droppedFramesTotal);
@@ -468,13 +489,8 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
     private async Task EncodeLoopAsync(string outputPath, int width, int height, CancellationToken ct)
     {
-        // Фіксуємо FPS один раз — не змінюється протягом запису
         int fixedFps = _quality.Fps;
- 
-        // Окрема черга між frame-pacer і FFmpeg pipe writer.
-        // Wait (не DropOldest) — якщо FFmpeg відстає, pacer чекає,
-        // але не пропускає кадри в timeline відео.
-        // Розмір: FPS * 4 секунди — буфер для encoder spikes.
+
         var encodeChannel = Channel.CreateBounded<TimestampedFrame>(
             new BoundedChannelOptions(fixedFps * 4)
             {
@@ -483,9 +499,99 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                 SingleReader = true,
             });
 
-        // Frame pacer: окремий LongRunning thread з підвищеним пріоритетом.
-        // Відповідальність: читати з _frameChannel і писати в encodeChannel
-        // з точним timing (fixedFps). НЕ виконує IO до FFmpeg pipe.
+        // ── Diagnostic setup ─────────────────────────────────────────────────
+        var diagPath     = Path.ChangeExtension(outputPath, null) + "_diag.txt";
+        var diagSw       = Stopwatch.StartNew();
+        var diagQueue    = new ConcurrentQueue<string>();
+        var diagStatsCts = new CancellationTokenSource();
+
+        Action<string> DiagEvent = msg =>
+            diagQueue.Enqueue($"{diagSw.Elapsed:mm\\:ss\\.fff} | {msg}");
+
+        DiagEvent("=== AlgoReplay Pipeline Diagnostic Log ===");
+        DiagEvent($"Quality={_quality.Label}  FPS={fixedFps}  CapChan={_quality.Fps * 3}  EncChan={fixedFps * 4}  Video={width}x{height}");
+        DiagEvent("");
+        DiagEvent("Each STATS line = 1-second window");
+        DiagEvent("  ARR    = WinRT frames captured");
+        DiagEvent("  DROP   = dropped at capture channel (pacer too slow)");
+        DiagEvent("  SENT   = frames written to FFmpeg");
+        DiagEvent("  FREEZE = frame slots with no new content (duplicate sent)");
+        DiagEvent("  ONTIME = pacer iterations that slept (on schedule)");
+        DiagEvent("  CATCHUP= pacer iterations that ran without sleep (behind)");
+        DiagEvent("  BKPRS  = times FFmpeg encode channel was full (backpressure)");
+        DiagEvent("  OVRUN  = Thread.Sleep overruns > 10ms");
+        DiagEvent("  DEBT   = max pacer debt in this second (ms behind schedule)");
+        DiagEvent(new string('-', 100));
+
+        // Per-second stats reporter
+        var statsTask = Task.Run(async () =>
+        {
+            long pArr = 0, pDrop = 0, pSent = 0, pFreeze = 0;
+            long pOn = 0, pCu = 0, pBp = 0, pOv = 0;
+            try
+            {
+                while (!diagStatsCts.Token.IsCancellationRequested)
+                {
+                    await Task.Delay(1000, diagStatsCts.Token);
+
+                    long a  = Interlocked.Read(ref _diagFramesArrived);
+                    long d  = Interlocked.Read(ref _droppedFramesTotal);
+                    long s  = Interlocked.Read(ref _diagFramesSent);
+                    long f  = Interlocked.Read(ref _diagFreezeFrames);
+                    long on = Interlocked.Read(ref _diagOnSchedIter);
+                    long cu = Interlocked.Read(ref _diagCatchUpIter);
+                    long bp = Interlocked.Read(ref _diagBackpressure);
+                    long ov = Interlocked.Read(ref _diagSleepOverruns);
+                    long mx = Interlocked.Exchange(ref _diagMaxDebtMs, 0);
+
+                    diagQueue.Enqueue(
+                        $"STATS {diagSw.Elapsed:mm\\:ss} | " +
+                        $"ARR={a-pArr,4} DROP={d-pDrop,3} SENT={s-pSent,4} " +
+                        $"FREEZE={f-pFreeze,5} ONTIME={on-pOn,4} CATCHUP={cu-pCu,5} " +
+                        $"BKPRS={bp-pBp,3} OVRUN={ov-pOv,3} DEBT={mx,6}ms");
+
+                    pArr = a; pDrop = d; pSent = s; pFreeze = f;
+                    pOn = on; pCu = cu; pBp = bp; pOv = ov;
+                }
+            }
+            catch (OperationCanceledException) { }
+        });
+
+        // Async file writer: drains diagQueue to disk every 250ms
+        var writerTask = Task.Run(async () =>
+        {
+            try
+            {
+                await using var sw = new StreamWriter(diagPath, append: false, Encoding.UTF8);
+                while (true)
+                {
+                    bool wrote = false;
+                    while (diagQueue.TryDequeue(out var line))
+                    {
+                        await sw.WriteLineAsync(line);
+                        wrote = true;
+                    }
+                    if (wrote) await sw.FlushAsync();
+
+                    if (diagStatsCts.IsCancellationRequested && diagQueue.IsEmpty)
+                        break;
+
+                    try { await Task.Delay(250, diagStatsCts.Token); }
+                    catch (OperationCanceledException)
+                    {
+                        while (diagQueue.TryDequeue(out var line))
+                            await sw.WriteLineAsync(line);
+                        await sw.FlushAsync();
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex) { Log($"DiagWriter: {ex.Message}"); }
+        });
+        // ─────────────────────────────────────────────────────────────────────
+
+        // Frame pacer: LongRunning thread, AboveNormal priority, 1ms OS timer.
+        // Reads _frameChannel → encodeChannel at exactly fixedFps.
         var pacerTask = Task.Factory.StartNew(() =>
         {
             Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
@@ -501,7 +607,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
                 while (!ct.IsCancellationRequested)
                 {
-                    // Виходимо якщо capture завершився і черга порожня
                     if (reader.Completion.IsCompleted && reader.Count == 0)
                         break;
 
@@ -510,65 +615,82 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
                     if (wait > 0)
                     {
-                        // ON SCHEDULE: читаємо всі доступні кадри перед сном — беремо найсвіжіший
-                        while (reader.TryRead(out var candidate))
-                        {
-                            current?.Dispose();
-                            current = candidate;
-                        }
+                        // ON SCHEDULE: drain all frames before sleep, keep newest
+                        while (reader.TryRead(out var c)) { current?.Dispose(); current = c; }
 
-                        // Гібридне очікування: Sleep для великих інтервалів + spin для точності
+                        long beforeSleep = Stopwatch.GetTimestamp();
                         int sleepMs = (int)(wait * 1000L / Stopwatch.Frequency) - 1;
                         if (sleepMs > 1)
                             Thread.Sleep(sleepMs);
 
-                        // Spin-wait для останнього ~1ms без yield
                         while (Stopwatch.GetTimestamp() < nextTick)
                         {
                             if (nextTick - Stopwatch.GetTimestamp() > Stopwatch.Frequency / 2000)
                                 Thread.Sleep(0);
                         }
 
-                        // Читаємо ще раз після сну — може з'явився ще свіжіший кадр
-                        while (reader.TryRead(out var candidate))
+                        // Detect OS sleep overruns (scheduler gave us back too late)
+                        if (sleepMs > 1)
                         {
-                            current?.Dispose();
-                            current = candidate;
+                            long actualMs   = (Stopwatch.GetTimestamp() - beforeSleep) * 1000L / Stopwatch.Frequency;
+                            long expectedMs = wait * 1000L / Stopwatch.Frequency;
+                            if (actualMs > expectedMs + 10)
+                            {
+                                Interlocked.Increment(ref _diagSleepOverruns);
+                                DiagEvent($"SLEEP_OVERRUN: expected={expectedMs}ms actual={actualMs}ms overrun={actualMs - expectedMs}ms");
+                            }
                         }
+
+                        // Read again post-sleep — fresher content may have arrived
+                        while (reader.TryRead(out var c)) { current?.Dispose(); current = c; }
+
+                        Interlocked.Increment(ref _diagOnSchedIter);
                     }
                     else
                     {
-                        // CATCH-UP: читаємо рівно ОДИН кадр (FIFO).
-                        // Це рівномірно розподіляє накопичені кадри по ітераціях замість
-                        // того, щоб дренувати всі в одній ітерації і залишати наступні
-                        // порожніми — що призводило б до пропуску frame slot'ів.
-                        if (reader.TryRead(out var candidate))
-                        {
-                            current?.Dispose();
-                            current = candidate;
-                        }
+                        // CATCH-UP: read ONE frame (FIFO) — spreads accumulated frames
+                        // evenly across iterations instead of draining all in one shot
+                        // (which would leave subsequent catch-up iterations empty → lost slots)
+                        if (reader.TryRead(out var c)) { current?.Dispose(); current = c; }
+
+                        Interlocked.Increment(ref _diagCatchUpIter);
                     }
 
-                    // Рухаємо cursor вперед на один frame slot
                     nextTick += frameDurationTicks;
 
-                    // Захист від екстремального боргу (> 5 с) — обмежуємо без скидання до now.
                     now = Stopwatch.GetTimestamp();
                     long debtTicks = now - nextTick;
                     if (debtTicks > Stopwatch.Frequency * 5)
                     {
-                        Log($"Pacer: extreme debt ({debtTicks * 1000 / Stopwatch.Frequency}ms) — capping to 5 s.");
+                        long debtMs = debtTicks * 1000L / Stopwatch.Frequency;
+                        Log($"Pacer: extreme debt ({debtMs}ms) — capping to 5 s.");
+                        DiagEvent($"EXTREME_DEBT: {debtMs}ms — capped to 5000ms");
                         nextTick = now - Stopwatch.Frequency * 5;
                     }
 
-                    // Якщо кадру немає — freeze (FFmpeg повторить попередній кадр).
-                    if (current == null) continue;
+                    // Track max debt per second for stats
+                    long currDebt = Math.Max(0L, (now - nextTick) * 1000L / Stopwatch.Frequency);
+                    long prev = Interlocked.Read(ref _diagMaxDebtMs);
+                    while (currDebt > prev)
+                    {
+                        long old = Interlocked.CompareExchange(ref _diagMaxDebtMs, currDebt, prev);
+                        if (old == prev) break;
+                        prev = old;
+                    }
+
+                    if (current == null)
+                    {
+                        Interlocked.Increment(ref _diagFreezeFrames);
+                        continue;
+                    }
 
                     if (!encodeChannel.Writer.TryWrite(current))
                     {
-                        encodeChannel.Writer.WriteAsync(current, ct)
-                            .AsTask().GetAwaiter().GetResult();
+                        Interlocked.Increment(ref _diagBackpressure);
+                        DiagEvent($"BACKPRESSURE: encodeChannel full (cap={fixedFps * 4}), pacer blocked on WriteAsync");
+                        encodeChannel.Writer.WriteAsync(current, ct).AsTask().GetAwaiter().GetResult();
                     }
+                    Interlocked.Increment(ref _diagFramesSent);
                     current = null;
                 }
             }
@@ -576,7 +698,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
             catch (Exception ex) { Log($"Pacer error: {ex.GetType().Name}: {ex.Message}"); }
             finally
             {
-                // Dispose кадру якщо він не був переданий у encodeChannel
                 current?.Dispose();
                 encodeChannel.Writer.TryComplete();
                 timeEndPeriod(1);
@@ -584,38 +705,31 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
             }
 
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
- 
-        // FFmpeg frame source: читає з encodeChannel без будь-якого timing.
-        // Весь timing контролюється pacer thread вище.
-        // Цей метод виконується в LongRunning encode thread.
+
         IEnumerable<IVideoFrame> FrameSource()
         {
             var reader = encodeChannel.Reader;
             while (true)
             {
-                // Блокуємо поки є дані або channel не закрито
                 bool hasData;
-                try
-                {
-                    hasData = reader.WaitToReadAsync(ct).AsTask().GetAwaiter().GetResult();
-                }
+                try { hasData = reader.WaitToReadAsync(ct).AsTask().GetAwaiter().GetResult(); }
                 catch (OperationCanceledException) { break; }
- 
+
                 if (!hasData) break;
- 
+
                 while (reader.TryRead(out var frame))
                     yield return frame;
             }
         }
- 
+
         var videoSource = new RawVideoPipeSource(FrameSource()) { FrameRate = fixedFps };
- 
+
         try
         {
-            Log($"FFmpeg encode started ({width}×{height} @ {fixedFps} fps, " +
-                $"encodeBuffer={fixedFps * 4} frames)…");
+            Log($"FFmpeg encode started ({width}×{height} @ {fixedFps} fps, encodeBuffer={fixedFps * 4} frames)…");
             var encoder = HardwareEncoderDetector.Detect();
- 
+            DiagEvent($"Encoder: {encoder}");
+
             var encodeArgs = FFMpegArguments
                 .FromPipeInput(videoSource, opts => opts
                     .ForceFormat("rawvideo")
@@ -626,16 +740,16 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                         .WithCustomArgument("-pix_fmt yuv420p")
                         .WithCustomArgument($"-r {fixedFps}")
                         .WithCustomArgument("-fps_mode cfr");
- 
+
                     ApplyEncoderOptions(opts, encoder);
                 })
                 .CancellableThrough(ct);
- 
+
             var ok = await encodeArgs.ProcessAsynchronously(throwOnError: false);
- 
+
             Log(ok ? "Encode complete — MP4 fully written."
                    : "Encode completed with FFmpeg warnings.");
- 
+
             var total = Interlocked.Read(ref _droppedFramesTotal);
             if (total > 0) Log($"Total frames dropped by WinRT channel: {total}");
         }
@@ -645,9 +759,41 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
         }
         finally
         {
-            // Чекаємо завершення pacer перед виходом
-            try { await pacerTask.ConfigureAwait(false); }
-            catch { }
+            try { await pacerTask.ConfigureAwait(false); } catch { }
+
+            // Write final diagnostic summary
+            long totArr    = Interlocked.Read(ref _diagFramesArrived);
+            long totDrop   = Interlocked.Read(ref _droppedFramesTotal);
+            long totSent   = Interlocked.Read(ref _diagFramesSent);
+            long totFreeze = Interlocked.Read(ref _diagFreezeFrames);
+            long totCu     = Interlocked.Read(ref _diagCatchUpIter);
+            long totOn     = Interlocked.Read(ref _diagOnSchedIter);
+            long totBp     = Interlocked.Read(ref _diagBackpressure);
+            long totOv     = Interlocked.Read(ref _diagSleepOverruns);
+            long expected  = (long)(diagSw.Elapsed.TotalSeconds * fixedFps);
+            double lostPct = expected > 0 ? (expected - totSent) * 100.0 / expected : 0;
+
+            DiagEvent("");
+            DiagEvent("=== FINAL SUMMARY ===");
+            DiagEvent($"Diag elapsed (encode loop):   {diagSw.Elapsed:mm\\:ss\\.fff}");
+            DiagEvent($"RecordingClock elapsed:        {_recordingClock.Elapsed:mm\\:ss\\.fff}");
+            DiagEvent($"Expected frames @ {fixedFps}fps:    {expected}");
+            DiagEvent($"Frames sent to FFmpeg:         {totSent}");
+            DiagEvent($"Lost frame slots:              {expected - totSent}  ({lostPct:F1}%)");
+            DiagEvent($"WinRT frames arrived:          {totArr}");
+            DiagEvent($"WinRT frames dropped (chan):   {totDrop}");
+            DiagEvent($"Freeze frames (dup written):   {totFreeze}");
+            DiagEvent($"Pacer on-schedule iterations:  {totOn}");
+            DiagEvent($"Pacer catch-up iterations:     {totCu}");
+            DiagEvent($"FFmpeg backpressure events:    {totBp}");
+            DiagEvent($"Sleep overrun events:          {totOv}");
+
+            diagStatsCts.Cancel();
+            try { await statsTask.ConfigureAwait(false); } catch { }
+            try { await writerTask.ConfigureAwait(false); } catch { }
+            diagStatsCts.Dispose();
+
+            Log($"Diagnostic log: {diagPath}");
         }
     }
 
