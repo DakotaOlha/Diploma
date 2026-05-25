@@ -14,7 +14,10 @@ public interface ILogService
 
     Task LogEventAsync(int sessionId, string eventType,
         string description, string? metadata = null);
+    Task LogEventAtAsync(int sessionId, string eventType,
+        string description, string? metadata, DateTime atUtc);
     Task<IReadOnlyList<LogEntry>> GetEntriesAsync(int sessionId);
     Task<IReadOnlyList<LogEntry>> GetEntriesByTypeAsync(int sessionId, string eventType);
     Task UpdateSessionVideoPathAsync(int sessionId, string newVideoPath);
+    Task UpdateSessionNameAsync(int sessionId, string name);
 }

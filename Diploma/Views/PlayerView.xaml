@@ -32,7 +32,7 @@
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            Foreground="#888" FontSize="14"
-                           Visibility="{Binding HasMedia, Converter={StaticResource BoolToVis}}"/>
+                           Visibility="{Binding HasNoMedia, Converter={StaticResource BoolToVis}}"/>
             </Grid>
 
             <GridSplitter Grid.Column="1" Width="4"

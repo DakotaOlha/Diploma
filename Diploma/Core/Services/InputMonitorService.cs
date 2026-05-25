@@ -63,6 +63,7 @@ public class InputMonitorService : IInputMonitorService
 
         _windowTitleMonitor.Start(sessionId);
         _processMonitor.Start(sessionId);
+        _fileSystemMonitor.Start(sessionId);
     }
     
     public void SetMode(RecordingMode mode)

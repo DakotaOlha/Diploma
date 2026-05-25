@@ -20,9 +20,14 @@ public partial class PlayerViewModel : ObservableObject, IDisposable
 
     [ObservableProperty] private bool _isPlaying;
     [ObservableProperty] private bool _hasMedia;
-    [ObservableProperty] private long _durationMs;   
-    [ObservableProperty] private long _positionMs;      
+    [ObservableProperty] private long _durationMs;
+    [ObservableProperty] private long _positionMs;
     [ObservableProperty] private float _volume = 100;
+
+    public bool HasNoMedia => !HasMedia;
+
+    partial void OnHasMediaChanged(bool value) =>
+        OnPropertyChanged(nameof(HasNoMedia));
 
     [ObservableProperty] private string _timeLabel = "00:00:00 / 00:00:00";
 
@@ -221,7 +226,7 @@ public partial class PlayerViewModel : ObservableObject, IDisposable
         if (_dispatcher.HasShutdownStarted)
             return;
 
-        _dispatcher.Invoke(action);
+        _dispatcher.BeginInvoke(action);
     }
 
     public void Dispose()

@@ -131,8 +131,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
     private const long SnapshotIntervalMs  = 200;
     private const int  LogRingCapacity     = 60;
     
-    private int _channelCapacity = 90;
-
     private int _state = (int)CaptureState.Idle;
     private CaptureState State => (CaptureState)Volatile.Read(ref _state);
 
@@ -231,7 +229,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
             var winrtDevice = CreateD3DDevice();
 
             var channel = Channel.CreateBounded<TimestampedFrame>(
-                new BoundedChannelOptions(_channelCapacity)
+                new BoundedChannelOptions(_quality.Fps * 3)
                 {
                     FullMode     = BoundedChannelFullMode.DropOldest,
                     SingleWriter = true,
@@ -265,8 +263,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        _channelCapacity = _quality.Fps * 3;
-        
         if (!TryTransition(CaptureState.Prepared, CaptureState.Recording))
             throw new InvalidOperationException(
                 $"BeginCaptureAsync requires Prepared state (current: {State}).");
@@ -561,13 +557,16 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                         encodeChannel.Writer.WriteAsync(current, ct)
                             .AsTask().GetAwaiter().GetResult();
                     }
+                    // Передаємо ownership у channel — НЕ dispose в наступній ітерації
+                    current = null;
                 }
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log($"Pacer error: {ex.GetType().Name}: {ex.Message}"); }
             finally
             {
-                // НЕ dispose current — він вже у encodeChannel або буде dispose нижче
+                // Dispose кадру якщо він не був переданий у encodeChannel
+                current?.Dispose();
                 encodeChannel.Writer.TryComplete();
                 timeEndPeriod(1);
                 Log("Frame pacer finished.");

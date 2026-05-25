@@ -50,18 +50,33 @@
                                        FontWeight="Medium"
                                        TextTrimming="CharacterEllipsis"/>
 
-                            <Button Grid.Row="0" Grid.Column="1"
-                                    Content="✕"
-                                    FontSize="10"
-                                    Padding="4,1"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    Foreground="#888"
-                                    Cursor="Hand"
-                                    Command="{Binding DataContext.DeleteSessionCommand,
-                                              RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                    CommandParameter="{Binding}"/>
-                            
+                            <StackPanel Grid.Row="0" Grid.Column="1"
+                                        Orientation="Horizontal">
+                                <Button Content="✏"
+                                        FontSize="10"
+                                        Padding="4,1"
+                                        Margin="0,0,2,0"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Foreground="#78B4B7"
+                                        Cursor="Hand"
+                                        ToolTip="Перейменувати"
+                                        Command="{Binding DataContext.RenameSessionCommand,
+                                                  RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                        CommandParameter="{Binding}"/>
+                                <Button Content="✕"
+                                        FontSize="10"
+                                        Padding="4,1"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Foreground="#888"
+                                        Cursor="Hand"
+                                        ToolTip="Видалити"
+                                        Command="{Binding DataContext.DeleteSessionCommand,
+                                                  RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                        CommandParameter="{Binding}"/>
+                            </StackPanel>
+
                             
 
                             <TextBlock Grid.Row="1" Grid.ColumnSpan="2"
