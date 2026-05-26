@@ -726,16 +726,21 @@
                         BorderThickness="0,1,0,0"
                         Padding="24,0">
                     <Grid Height="52">
-                        <TextBlock Text="Зміни не збережено"
-                                   Foreground="{StaticResource AccentGoldBrush}"
-                                   FontSize="12" VerticalAlignment="Center"
-                                   HorizontalAlignment="Left"/>
-                        <TextBlock Text="{Binding SaveStatus}"
-                                   Foreground="{StaticResource AccentTealBrush}"
+                        <TextBlock Text="{Binding StatusDisplay}"
                                    FontSize="12" FontWeight="SemiBold"
                                    VerticalAlignment="Center"
-                                   HorizontalAlignment="Left"
-                                   Margin="160,0,0,0"/>
+                                   HorizontalAlignment="Left">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource AccentTealBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsDirty}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource AccentGoldBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                         <Button Content="Зберегти"
                                 Command="{Binding SaveSettingsCommand}"
                                 Style="{StaticResource SaveBtnStyle}"
