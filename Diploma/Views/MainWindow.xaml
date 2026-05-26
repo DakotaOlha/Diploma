@@ -249,7 +249,7 @@
             </Border>
 
             <!-- Основний контент -->
-            <TabControl Grid.Row="1" Margin="0,8,0,0">
+            <TabControl x:Name="MainTabControl" Grid.Row="1" Margin="0,8,0,0">
                 <TabItem Header="● Запис">
                     <Grid Margin="24,20">
                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" 

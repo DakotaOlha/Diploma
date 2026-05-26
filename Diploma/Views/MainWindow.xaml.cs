@@ -129,9 +129,12 @@ public partial class MainWindow : Window
     private void MainWindow_StateChanged(object? sender, EventArgs e)
     {
         if (BtnMaximize != null)
-        {
             BtnMaximize.Content = WindowState == WindowState.Maximized ? "❐" : "□";
-        }
+    }
+
+    public void NavigateTo(int tabIndex)
+    {
+        MainTabControl.SelectedIndex = tabIndex;
     }
 
     protected override void OnClosing(CancelEventArgs e)
