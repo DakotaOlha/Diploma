@@ -227,10 +227,10 @@ public partial class OverlayWindow : Window
     }
 
     private void SessionsBtn_Click(object sender, RoutedEventArgs e) =>
-        NavigateMainWindow(1);
+        NavigateMainWindow(0); // Sessions is now the first (index 0) tab
 
     private void SettingsBtn_Click(object sender, RoutedEventArgs e) =>
-        NavigateMainWindow(3);
+        ((App)App.Current).GetSettingsWindow().Show();
 
     private static void NavigateMainWindow(int tabIndex)
     {
