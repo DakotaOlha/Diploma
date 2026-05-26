@@ -53,6 +53,7 @@ public partial class App : Application
                 services.AddSingleton<PlayerView>();
                 services.AddSingleton<SettingsViewModel>();
                 services.AddSingleton<SettingsView>();
+                services.AddSingleton<SettingsWindow>();
                 services.AddSingleton<OverlayWindow>();
                 services.AddSingleton<MainWindow>();
             })
@@ -248,6 +249,6 @@ public partial class App : Application
         win.Activate();
     }
 
-    public OverlayWindow GetOverlay() =>
-        _host.Services.GetRequiredService<OverlayWindow>();
+    public OverlayWindow   GetOverlay()        => _host.Services.GetRequiredService<OverlayWindow>();
+    public SettingsWindow  GetSettingsWindow() => _host.Services.GetRequiredService<SettingsWindow>();
 }
