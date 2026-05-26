@@ -167,6 +167,10 @@ public partial class OverlayWindow : Window
         CollapsedStrip.Visibility = Visibility.Collapsed;
         ExpandedBar.Visibility    = Visibility.Visible;
 
+        // Restore violation banner if its timer is still running
+        if (_violationTimer != null)
+            ViolationPanel.Visibility = Visibility.Visible;
+
         var anim = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
@@ -187,7 +191,8 @@ public partial class OverlayWindow : Window
         };
         anim.Completed += (_, _) =>
         {
-            ExpandedBar.Visibility = Visibility.Collapsed;
+            ExpandedBar.Visibility    = Visibility.Collapsed;
+            ViolationPanel.Visibility = Visibility.Collapsed;
             ExpandedBar.BeginAnimation(OpacityProperty, null);
             ExpandedBar.Opacity = 1;
 
