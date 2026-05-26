@@ -36,6 +36,8 @@ public sealed class BlacklistMonitor : IDisposable
     private string   _lastTitle = string.Empty;
     private DateTime _lastLogAt = DateTime.MinValue;
 
+    public event EventHandler<string>? ViolationDetected;
+
     public BlacklistMonitor(ILogService logService) => _logService = logService;
 
     public void Start(int sessionId)
@@ -78,6 +80,8 @@ public sealed class BlacklistMonitor : IDisposable
 
             _lastTitle = title;
             _lastLogAt = now;
+
+            ViolationDetected?.Invoke(this, $"Порушення: {matched}");
 
             _ = _logService.LogEventAsync(
                 _sessionId,

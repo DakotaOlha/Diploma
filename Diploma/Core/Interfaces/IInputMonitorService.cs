@@ -5,8 +5,9 @@ namespace Diploma.Core.Interfaces;
 public interface IInputMonitorService : IDisposable
 {
     bool IsRunning { get; }
+    event EventHandler<string>? ViolationDetected;
     void Start(int sessionId);
     void Stop();
     void SetMode(RecordingMode mode);
-    void AddWatchPath(string path); 
+    void AddWatchPath(string path);
 }

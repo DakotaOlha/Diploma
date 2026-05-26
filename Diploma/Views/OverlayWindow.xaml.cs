@@ -16,8 +16,10 @@ public partial class OverlayWindow : Window
     private readonly IScreenCaptureService _captureService;
     private readonly IAudioCaptureService  _audioService;
     private readonly DiskSpaceService      _diskSpaceService;
+    private readonly IInputMonitorService  _inputMonitor;
 
     private System.Timers.Timer? _diskTimer;
+    private DispatcherTimer?     _violationTimer;
     private volatile bool        _isClosing;
     private bool                 _isExpanded = true;
 
@@ -31,7 +33,8 @@ public partial class OverlayWindow : Window
         MainViewModel         viewModel,
         IScreenCaptureService captureService,
         IAudioCaptureService  audioService,
-        DiskSpaceService      diskSpaceService)
+        DiskSpaceService      diskSpaceService,
+        IInputMonitorService  inputMonitor)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -39,11 +42,13 @@ public partial class OverlayWindow : Window
         _captureService   = captureService;
         _audioService     = audioService;
         _diskSpaceService = diskSpaceService;
+        _inputMonitor     = inputMonitor;
 
         _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _collapseTimer.Tick += (_, _) => BeginCollapse();
 
-        _captureService.RecordingStarted += OnRecordingStarted;
+        _captureService.RecordingStarted   += OnRecordingStarted;
+        _inputMonitor.ViolationDetected    += OnViolationDetected;
 
         if (viewModel is System.ComponentModel.INotifyPropertyChanged npc)
             npc.PropertyChanged += OnViewModelPropertyChanged;
@@ -78,6 +83,7 @@ public partial class OverlayWindow : Window
         _diskTimer?.Dispose();
         _diskTimer = null;
         _captureService.RecordingStarted -= OnRecordingStarted;
+        _inputMonitor.ViolationDetected  -= OnViolationDetected;
         if (DataContext is System.ComponentModel.INotifyPropertyChanged npc)
             npc.PropertyChanged -= OnViewModelPropertyChanged;
     }
@@ -109,7 +115,34 @@ public partial class OverlayWindow : Window
         catch (Exception) { }
     }
 
-    // ── Expand / Collapse ────────────────────────────────────────────────────
+    // ── Violation banner ─────────────────────────────────────────────────────
+
+    private void OnViolationDetected(object? sender, string message)
+    {
+        if (_isClosing || Dispatcher.HasShutdownStarted) return;
+        try { Dispatcher.Invoke(() => ShowViolationBanner(message)); }
+        catch (Exception) { }
+    }
+
+    private void ShowViolationBanner(string message)
+    {
+        ViolationText.Text        = message;
+        ViolationPanel.Visibility = Visibility.Visible;
+
+        if (!_isExpanded) BeginExpand();
+
+        _violationTimer?.Stop();
+        _violationTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        _violationTimer.Tick += (_, _) =>
+        {
+            _violationTimer?.Stop();
+            _violationTimer = null;
+            ViolationPanel.Visibility = Visibility.Collapsed;
+        };
+        _violationTimer.Start();
+    }
+
+    // ── Expand / Collapse ─────────────────────────────────────────────────────
 
     public new void Show()
     {
