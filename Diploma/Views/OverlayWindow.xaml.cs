@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -166,14 +168,52 @@ public partial class OverlayWindow : Window
     private void RecordBtn_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not MainViewModel vm) return;
-        if (vm.IsRecording) _ = vm.StopRecordingCommand.ExecuteAsync(null);
-        else                _ = vm.StartRecordingCommand.ExecuteAsync(null);
+
+        if (vm.IsRecording)
+        {
+            _ = vm.StopRecordingCommand.ExecuteAsync(null);
+        }
+        else
+        {
+            // Hide overlay so the user can click the target window to capture.
+            // CaptureTargetSelected will call Show() again once the window is chosen.
+            Hide();
+            _ = vm.StartRecordingCommand.ExecuteAsync(null);
+        }
     }
 
     private void MicBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is MainViewModel vm)
-            vm.IsMicEnabled = !vm.IsMicEnabled;
+        if (DataContext is not MainViewModel vm) return;
+
+        var menu = new ContextMenu { StaysOpen = false };
+
+        var noMic = new MenuItem { Header = "Без мікрофону" };
+        if (!vm.IsMicEnabled) noMic.IsChecked = true;
+        noMic.Click += (_, _) => vm.IsMicEnabled = false;
+        menu.Items.Add(noMic);
+
+        if (vm.MicDevices.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+            foreach (var device in vm.MicDevices)
+            {
+                var item = new MenuItem { Header = device };
+                if (vm.IsMicEnabled && vm.SelectedMicDevice == device)
+                    item.IsChecked = true;
+                var captured = device;
+                item.Click += (_, _) =>
+                {
+                    vm.SelectedMicDevice = captured;
+                    vm.IsMicEnabled      = true;
+                };
+                menu.Items.Add(item);
+            }
+        }
+
+        menu.PlacementTarget = (UIElement)sender;
+        menu.Placement       = PlacementMode.Bottom;
+        menu.IsOpen          = true;
     }
 
     private void SessionsBtn_Click(object sender, RoutedEventArgs e) =>
