@@ -223,7 +223,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
             var item = await Application.Current.Dispatcher.InvokeAsync(async () =>
             {
-                var hwnd = new WindowInteropHelper(Application.Current.MainWindow).Handle;
+                var hwnd = new WindowInteropHelper(Application.Current.MainWindow).EnsureHandle();
                 return await CapturePickerHelper.PickAsync(hwnd);
             }).Task.Unwrap().ConfigureAwait(false);
 
