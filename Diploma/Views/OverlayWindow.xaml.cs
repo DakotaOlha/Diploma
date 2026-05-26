@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Diploma.Core.Interfaces;
+using Diploma.Core.Models;
 using Diploma.Core.Services;
 using Diploma.ViewModels;
 
@@ -17,6 +18,7 @@ public partial class OverlayWindow : Window
     private readonly IAudioCaptureService  _audioService;
     private readonly DiskSpaceService      _diskSpaceService;
     private readonly IInputMonitorService  _inputMonitor;
+    private readonly ISettingsService      _settingsService;
 
     private System.Timers.Timer? _diskTimer;
     private DispatcherTimer?     _violationTimer;
@@ -34,7 +36,8 @@ public partial class OverlayWindow : Window
         IScreenCaptureService captureService,
         IAudioCaptureService  audioService,
         DiskSpaceService      diskSpaceService,
-        IInputMonitorService  inputMonitor)
+        IInputMonitorService  inputMonitor,
+        ISettingsService      settingsService)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -43,6 +46,7 @@ public partial class OverlayWindow : Window
         _audioService     = audioService;
         _diskSpaceService = diskSpaceService;
         _inputMonitor     = inputMonitor;
+        _settingsService  = settingsService;
 
         _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _collapseTimer.Tick += (_, _) => BeginCollapse();
@@ -126,6 +130,11 @@ public partial class OverlayWindow : Window
 
     private void ShowViolationBanner(string message)
     {
+        var vm = DataContext as MainViewModel;
+        if (vm?.SelectedMode?.Mode == RecordingMode.Olympic
+            && !_settingsService.Current.OlympicShowViolationToast)
+            return;
+
         ViolationText.Text        = message;
         ViolationPanel.Visibility = Visibility.Visible;
 

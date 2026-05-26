@@ -69,6 +69,9 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _workRunDebug;
     [ObservableProperty] private bool _workIdle;
 
+    // Olympic behaviour
+    [ObservableProperty] private bool _olympicShowViolationToast;
+
     // Personal events
     [ObservableProperty] private bool _personalClipboard;
     [ObservableProperty] private bool _personalFileSave;
@@ -95,6 +98,7 @@ public partial class SettingsViewModel : ObservableObject
     private static readonly HashSet<string> _dirtyTracked =
     [
         nameof(DefaultQuality), nameof(DefaultMode),
+        nameof(OlympicShowViolationToast),
         nameof(LearningClipboard), nameof(LearningFileSave), nameof(LearningUndo),
         nameof(LearningRunDebug), nameof(LearningIdle),
         nameof(WorkClipboard), nameof(WorkFileSave), nameof(WorkRunDebug), nameof(WorkIdle),
@@ -131,6 +135,8 @@ public partial class SettingsViewModel : ObservableObject
         DefaultMode    = AvailableModes.FirstOrDefault(m => m.Mode == s.DefaultMode)
                          ?? AvailableModes.First(m => m.Mode == RecordingMode.Personal);
 
+        OlympicShowViolationToast = s.OlympicShowViolationToast;
+
         LearningClipboard = s.LearningEvents.Contains(EventTypes.ClipboardCopy);
         LearningFileSave  = s.LearningEvents.Contains(EventTypes.FileSave);
         LearningUndo      = s.LearningEvents.Contains(EventTypes.Undo);
@@ -164,6 +170,8 @@ public partial class SettingsViewModel : ObservableObject
 
         s.DefaultQuality = DefaultQuality?.Quality ?? CaptureQuality.Medium;
         s.DefaultMode    = DefaultMode?.Mode ?? RecordingMode.Personal;
+
+        s.OlympicShowViolationToast = OlympicShowViolationToast;
 
         s.LearningEvents = BuildSet(
             (EventTypes.ClipboardCopy,  LearningClipboard),
