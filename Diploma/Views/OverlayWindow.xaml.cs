@@ -45,6 +45,9 @@ public partial class OverlayWindow : Window
 
         _captureService.RecordingStarted += OnRecordingStarted;
 
+        if (viewModel is System.ComponentModel.INotifyPropertyChanged npc)
+            npc.PropertyChanged += OnViewModelPropertyChanged;
+
         Loaded += OnLoaded;
         Closed += OnClosed;
     }
@@ -75,6 +78,21 @@ public partial class OverlayWindow : Window
         _diskTimer?.Dispose();
         _diskTimer = null;
         _captureService.RecordingStarted -= OnRecordingStarted;
+        if (DataContext is System.ComponentModel.INotifyPropertyChanged npc)
+            npc.PropertyChanged -= OnViewModelPropertyChanged;
+    }
+
+    // Re-expand if the recording start was cancelled (picker dismissed or error).
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not (nameof(MainViewModel.IsBusy) or nameof(MainViewModel.IsRecording)))
+            return;
+        if (DataContext is not MainViewModel vm) return;
+        if (!vm.IsBusy && !vm.IsRecording && !_isExpanded)
+        {
+            try { Dispatcher.Invoke(BeginExpand); }
+            catch (Exception) { }
+        }
     }
 
     private void OnRecordingStarted(object? sender, EventArgs e)
@@ -175,9 +193,11 @@ public partial class OverlayWindow : Window
         }
         else
         {
-            // Hide overlay so the user can click the target window to capture.
-            // CaptureTargetSelected will call Show() again once the window is chosen.
-            Hide();
+            // Collapse to 4-px strip — window stays alive (keeps app foreground
+            // status) so the system GraphicsCapturePicker can appear.
+            // CaptureTargetSelected will call Show() → BeginExpand() once the
+            // window is chosen.
+            BeginCollapse();
             _ = vm.StartRecordingCommand.ExecuteAsync(null);
         }
     }
