@@ -212,52 +212,91 @@
                                           DisplayMemberPath="DisplayName"/>
                             </Grid>
 
-                            <!-- Logging section header -->
-                            <TextBlock Text="НАЛАШТУВАННЯ ЛОГУВАННЯ"
+                            <!-- Mode overview header -->
+                            <TextBlock Text="РЕЖИМИ ЗАПИСУ"
                                        FontSize="10" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextDimBrush}"
-                                       Margin="0,20,0,2"
-                                       CharacterSpacing="100"/>
+                                       Margin="0,20,0,2" CharacterSpacing="100"/>
                             <Rectangle Height="1" Fill="{StaticResource BorderMidBrush}"
                                        Opacity="0.5" Margin="0,0,0,10"/>
 
-                            <!-- Olympic card (fixed) -->
-                            <Border Style="{StaticResource ModeCardBorderBase}"
-                                    Background="#0D1F1F">
+                            <!-- Olympic info card -->
+                            <Border Padding="14,12" CornerRadius="10" Margin="0,0,0,8">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background"      Value="#0D1F1F"/>
+                                        <Setter Property="BorderBrush"     Value="#2A3E40"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsOlympicDefault}" Value="True">
+                                                <Setter Property="BorderBrush"     Value="{StaticResource AccentGoldBrush}"/>
+                                                <Setter Property="BorderThickness" Value="1.5"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
                                 <Grid>
+                                    <Ellipse Width="8" Height="8" Fill="{StaticResource AccentGoldBrush}"
+                                             HorizontalAlignment="Right" VerticalAlignment="Top"
+                                             Visibility="{Binding IsOlympicDefault, Converter={StaticResource BoolToVis}}"/>
                                     <StackPanel>
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                            <TextBlock Text="🏆  Олімпіада"
-                                                       FontSize="13" FontWeight="Bold"
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                            <TextBlock Text="🏆  Олімпіада" FontSize="13" FontWeight="Bold"
                                                        Foreground="{StaticResource AccentGoldBrush}"/>
                                             <Border Background="#1E3636" CornerRadius="8"
-                                                    Padding="8,2" Margin="10,0,0,0"
-                                                    VerticalAlignment="Center">
-                                                <TextBlock Text="Фіксований режим"
-                                                           FontSize="10"
+                                                    Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="Фіксований режим" FontSize="10"
                                                            Foreground="{StaticResource TextMutedBrush}"/>
                                             </Border>
                                         </StackPanel>
-                                        <UniformGrid Columns="2">
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Буфер обміну"     IsChecked="True" IsEnabled="False"/>
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Збереження"       IsChecked="True" IsEnabled="False"/>
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Run / Debug"      IsChecked="True" IsEnabled="False"/>
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Бездіяльність"    IsChecked="True" IsEnabled="False"/>
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Маркери"          IsChecked="True" IsEnabled="False"/>
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Скріншоти"        IsChecked="True" IsEnabled="False"/>
-                                        </UniformGrid>
-                                        <Border Background="#1E3636" CornerRadius="8"
-                                                Padding="10,3" Margin="0,10,0,0"
-                                                HorizontalAlignment="Left">
-                                            <TextBlock Text="Не редагується"
-                                                       FontSize="10"
-                                                       Foreground="{StaticResource TextDimBrush}"/>
-                                        </Border>
+                                        <TextBlock Text="Максимальна деталізація: буфер, збереження, Run/Debug, бездіяльність та всі маркери"
+                                                   FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                                   TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Grid>
                             </Border>
 
-                            <!-- Personal card -->
+                            <!-- Learning info card -->
+                            <Border Padding="14,12" CornerRadius="10" Margin="0,0,0,8">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background"      Value="{StaticResource BgCardBrush}"/>
+                                        <Setter Property="BorderBrush"     Value="#2A3E40"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsLearningDefault}" Value="True">
+                                                <Setter Property="BorderBrush"     Value="{StaticResource AccentGoldBrush}"/>
+                                                <Setter Property="BorderThickness" Value="1.5"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Ellipse Width="8" Height="8" Fill="{StaticResource AccentGoldBrush}"
+                                             HorizontalAlignment="Right" VerticalAlignment="Top"
+                                             Visibility="{Binding IsLearningDefault, Converter={StaticResource BoolToVis}}"/>
+                                    <StackPanel>
+                                        <TextBlock FontSize="13" FontWeight="Bold" Margin="0,0,0,6">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text"       Value="📚  Навчання"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsLearningDefault}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource AccentGoldBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="Фокус на навчальному процесі: відміна дій, IDE-події та бездіяльність"
+                                                   FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Personal info card -->
                             <Border Padding="14,12" CornerRadius="10" Margin="0,0,0,8">
                                 <Border.Style>
                                     <Style TargetType="Border">
@@ -277,7 +316,7 @@
                                              HorizontalAlignment="Right" VerticalAlignment="Top"
                                              Visibility="{Binding IsPersonalDefault, Converter={StaticResource BoolToVis}}"/>
                                     <StackPanel>
-                                        <TextBlock FontSize="13" FontWeight="Bold" Margin="0,0,0,8">
+                                        <TextBlock FontSize="13" FontWeight="Bold" Margin="0,0,0,6">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Text"       Value="🙂  Особистий"/>
@@ -290,22 +329,14 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                        <UniformGrid Columns="2">
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Буфер обміну"    IsChecked="{Binding PersonalClipboard}"/>
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Збереження"      IsChecked="{Binding PersonalFileSave}"/>
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Run / Debug"     IsChecked="{Binding PersonalRunDebug}"/>
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Бездіяльність"   IsChecked="{Binding PersonalIdle}"/>
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="IDE події"       IsChecked="{Binding PersonalIde}"/>
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Авто-збереження" IsChecked="{Binding PersonalAutoSave}"/>
-                                        </UniformGrid>
-                                        <TextBlock Text="+ Маркери · Скріншоти"
-                                                   FontSize="10" Foreground="{StaticResource AccentTealBrush}"
-                                                   Margin="0,10,0,0"/>
+                                        <TextBlock Text="Гнучке налаштування під власний стиль роботи та вподобання"
+                                                   FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                                   TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Grid>
                             </Border>
 
-                            <!-- Work card -->
+                            <!-- Work info card -->
                             <Border Padding="14,12" CornerRadius="10" Margin="0,0,0,8">
                                 <Border.Style>
                                     <Style TargetType="Border">
@@ -325,7 +356,7 @@
                                              HorizontalAlignment="Right" VerticalAlignment="Top"
                                              Visibility="{Binding IsWorkDefault, Converter={StaticResource BoolToVis}}"/>
                                     <StackPanel>
-                                        <TextBlock FontSize="13" FontWeight="Bold" Margin="0,0,0,8">
+                                        <TextBlock FontSize="13" FontWeight="Bold" Margin="0,0,0,6">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Text"       Value="💼  Робота"/>
@@ -338,15 +369,9 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
-                                        <UniformGrid Columns="2">
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Буфер обміну"  IsChecked="{Binding WorkClipboard}"/>
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Збереження"    IsChecked="{Binding WorkFileSave}"/>
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Run / Debug"   IsChecked="{Binding WorkRunDebug}"/>
-                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Бездіяльність" IsChecked="{Binding WorkIdle}"/>
-                                        </UniformGrid>
-                                        <TextBlock Text="+ Маркери · Скріншоти"
-                                                   FontSize="10" Foreground="{StaticResource TextDimBrush}"
-                                                   Margin="0,10,0,0"/>
+                                        <TextBlock Text="Робочий процес: збереження файлів, запуск застосунків та буфер обміну"
+                                                   FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                                   TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -362,27 +387,47 @@
                                        Margin="0,0,0,14"/>
 
                             <!-- Olympic -->
-                            <Border Style="{StaticResource ModeCardBorderBase}" Background="#0D1F1F">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                        <TextBlock Text="🏆  Олімпіада"
-                                                   FontSize="13" FontWeight="Bold"
-                                                   Foreground="{StaticResource AccentGoldBrush}"/>
-                                        <Border Background="#1E3636" CornerRadius="8"
-                                                Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock Text="Фіксований режим" FontSize="10"
-                                                       Foreground="{StaticResource TextMutedBrush}"/>
-                                        </Border>
+                            <Border Padding="14,12" CornerRadius="10" Margin="0,0,0,8">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background"      Value="#0D1F1F"/>
+                                        <Setter Property="BorderBrush"     Value="#2A3E40"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsOlympicDefault}" Value="True">
+                                                <Setter Property="BorderBrush"     Value="{StaticResource AccentGoldBrush}"/>
+                                                <Setter Property="BorderThickness" Value="1.5"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <Ellipse Width="8" Height="8" Fill="{StaticResource AccentGoldBrush}"
+                                             HorizontalAlignment="Right" VerticalAlignment="Top"
+                                             Visibility="{Binding IsOlympicDefault, Converter={StaticResource BoolToVis}}"/>
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                            <TextBlock Text="🏆  Олімпіада" FontSize="13" FontWeight="Bold"
+                                                       Foreground="{StaticResource AccentGoldBrush}"/>
+                                            <Border Background="#1E3636" CornerRadius="8"
+                                                    Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="Фіксований режим" FontSize="10"
+                                                           Foreground="{StaticResource TextMutedBrush}"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <UniformGrid Columns="3">
+                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Буфер обміну"  IsChecked="True" IsEnabled="False"/>
+                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Збереження"    IsChecked="True" IsEnabled="False"/>
+                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Run / Debug"   IsChecked="True" IsEnabled="False"/>
+                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Бездіяльність" IsChecked="True" IsEnabled="False"/>
+                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Маркери"       IsChecked="True" IsEnabled="False"/>
+                                            <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Скріншоти"     IsChecked="True" IsEnabled="False"/>
+                                        </UniformGrid>
+                                        <TextBlock Text="Не редагується"
+                                                   FontSize="10" Foreground="{StaticResource TextDimBrush}"
+                                                   Margin="0,8,0,0"/>
                                     </StackPanel>
-                                    <UniformGrid Columns="3">
-                                        <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Буфер обміну"  IsChecked="True" IsEnabled="False"/>
-                                        <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Збереження"    IsChecked="True" IsEnabled="False"/>
-                                        <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Run / Debug"   IsChecked="True" IsEnabled="False"/>
-                                        <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Бездіяльність" IsChecked="True" IsEnabled="False"/>
-                                        <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Маркери"       IsChecked="True" IsEnabled="False"/>
-                                        <CheckBox Style="{StaticResource GoldCheckBoxStyle}" Content="Скріншоти"     IsChecked="True" IsEnabled="False"/>
-                                    </UniformGrid>
-                                </StackPanel>
+                                </Grid>
                             </Border>
 
                             <!-- Learning -->
