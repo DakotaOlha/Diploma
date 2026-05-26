@@ -171,16 +171,6 @@ public partial class OverlayWindow : Window
 
     private void Strip_Click(object sender, MouseButtonEventArgs e) => BeginExpand();
 
-    private void Bar_DragMove(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ButtonState == MouseButtonState.Pressed)
-        {
-            _collapseTimer.Stop();
-            DragMove();
-            ResetCollapseTimer();
-        }
-    }
-
     // ── Button handlers ──────────────────────────────────────────────────────
 
     private void RecordBtn_Click(object sender, RoutedEventArgs e)
