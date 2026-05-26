@@ -43,6 +43,7 @@ public partial class MainViewModel : ObservableObject
     private readonly DiskSpaceService       _diskSpaceService;
     private readonly MediaMergeService      _mediaMergeService;
     private readonly IGlobalHotkeyService   _hotkeyService;
+    private readonly ISettingsService       _settingsService;
 
     private readonly SemaphoreSlim _recordingLock = new(1, 1);
     private CancellationTokenSource? _startCts;
@@ -63,7 +64,8 @@ public partial class MainViewModel : ObservableObject
         ModeProfileService     profileService,
         DiskSpaceService       diskSpaceService,
         MediaMergeService      mediaMergeService,
-        IGlobalHotkeyService   hotkeyService)
+        IGlobalHotkeyService   hotkeyService,
+        ISettingsService       settingsService)
     {
         _captureService      = captureService;
         _logService          = logService;
@@ -73,9 +75,13 @@ public partial class MainViewModel : ObservableObject
         _diskSpaceService    = diskSpaceService;
         _mediaMergeService   = mediaMergeService;
         _hotkeyService       = hotkeyService;
+        _settingsService     = settingsService;
 
         AvailableModes = _profileService.GetAllProfiles();
-        SelectedMode   = AvailableModes.First(m => m.Mode == RecordingMode.Personal);
+
+        var defaults = _settingsService.Current;
+        SelectedMode = AvailableModes.FirstOrDefault(m => m.Mode == defaults.DefaultMode)
+                       ?? AvailableModes.First(m => m.Mode == RecordingMode.Personal);
 
         AvailableQualities = new[]
         {
@@ -83,7 +89,8 @@ public partial class MainViewModel : ObservableObject
             CaptureQualityProfile.Medium,
             CaptureQualityProfile.High,
         };
-        SelectedQuality = CaptureQualityProfile.Medium;
+        SelectedQuality = AvailableQualities.FirstOrDefault(q => q.Quality == defaults.DefaultQuality)
+                          ?? CaptureQualityProfile.Medium;
 
         MicDevices = _audioCaptureService.GetAvailableDevices();
         if (MicDevices.Count > 0)
