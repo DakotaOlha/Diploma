@@ -7,6 +7,8 @@ public class AppSettings
     public CaptureQuality DefaultQuality { get; set; } = CaptureQuality.Medium;
     public RecordingMode  DefaultMode    { get; set; } = RecordingMode.Personal;
 
+    public bool OlympicShowViolationToast { get; set; } = true;
+
     public HashSet<string> LearningEvents { get; set; } = [..DefaultLearningEvents];
     public HashSet<string> WorkEvents     { get; set; } = [..DefaultWorkEvents];
     public HashSet<string> PersonalEvents { get; set; } = [..DefaultPersonalEvents];

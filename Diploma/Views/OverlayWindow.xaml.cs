@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Diploma.Core.Interfaces;
+using Diploma.Core.Models;
 using Diploma.Core.Services;
 using Diploma.ViewModels;
 
@@ -16,8 +17,11 @@ public partial class OverlayWindow : Window
     private readonly IScreenCaptureService _captureService;
     private readonly IAudioCaptureService  _audioService;
     private readonly DiskSpaceService      _diskSpaceService;
+    private readonly IInputMonitorService  _inputMonitor;
+    private readonly ISettingsService      _settingsService;
 
     private System.Timers.Timer? _diskTimer;
+    private DispatcherTimer?     _violationTimer;
     private volatile bool        _isClosing;
     private bool                 _isExpanded = true;
 
@@ -31,7 +35,9 @@ public partial class OverlayWindow : Window
         MainViewModel         viewModel,
         IScreenCaptureService captureService,
         IAudioCaptureService  audioService,
-        DiskSpaceService      diskSpaceService)
+        DiskSpaceService      diskSpaceService,
+        IInputMonitorService  inputMonitor,
+        ISettingsService      settingsService)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -39,11 +45,14 @@ public partial class OverlayWindow : Window
         _captureService   = captureService;
         _audioService     = audioService;
         _diskSpaceService = diskSpaceService;
+        _inputMonitor     = inputMonitor;
+        _settingsService  = settingsService;
 
         _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _collapseTimer.Tick += (_, _) => BeginCollapse();
 
-        _captureService.RecordingStarted += OnRecordingStarted;
+        _captureService.RecordingStarted   += OnRecordingStarted;
+        _inputMonitor.ViolationDetected    += OnViolationDetected;
 
         if (viewModel is System.ComponentModel.INotifyPropertyChanged npc)
             npc.PropertyChanged += OnViewModelPropertyChanged;
@@ -78,6 +87,7 @@ public partial class OverlayWindow : Window
         _diskTimer?.Dispose();
         _diskTimer = null;
         _captureService.RecordingStarted -= OnRecordingStarted;
+        _inputMonitor.ViolationDetected  -= OnViolationDetected;
         if (DataContext is System.ComponentModel.INotifyPropertyChanged npc)
             npc.PropertyChanged -= OnViewModelPropertyChanged;
     }
@@ -109,7 +119,39 @@ public partial class OverlayWindow : Window
         catch (Exception) { }
     }
 
-    // ── Expand / Collapse ────────────────────────────────────────────────────
+    // ── Violation banner ─────────────────────────────────────────────────────
+
+    private void OnViolationDetected(object? sender, string message)
+    {
+        if (_isClosing || Dispatcher.HasShutdownStarted) return;
+        try { Dispatcher.Invoke(() => ShowViolationBanner(message)); }
+        catch (Exception) { }
+    }
+
+    private void ShowViolationBanner(string message)
+    {
+        var vm = DataContext as MainViewModel;
+        if (vm?.SelectedMode?.Mode == RecordingMode.Olympic
+            && !_settingsService.Current.OlympicShowViolationToast)
+            return;
+
+        ViolationText.Text        = message;
+        ViolationPanel.Visibility = Visibility.Visible;
+
+        if (!_isExpanded) BeginExpand();
+
+        _violationTimer?.Stop();
+        _violationTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        _violationTimer.Tick += (_, _) =>
+        {
+            _violationTimer?.Stop();
+            _violationTimer = null;
+            ViolationPanel.Visibility = Visibility.Collapsed;
+        };
+        _violationTimer.Start();
+    }
+
+    // ── Expand / Collapse ─────────────────────────────────────────────────────
 
     public new void Show()
     {
@@ -124,6 +166,10 @@ public partial class OverlayWindow : Window
 
         CollapsedStrip.Visibility = Visibility.Collapsed;
         ExpandedBar.Visibility    = Visibility.Visible;
+
+        // Restore violation banner if its timer is still running
+        if (_violationTimer != null)
+            ViolationPanel.Visibility = Visibility.Visible;
 
         var anim = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
         {
@@ -145,7 +191,8 @@ public partial class OverlayWindow : Window
         };
         anim.Completed += (_, _) =>
         {
-            ExpandedBar.Visibility = Visibility.Collapsed;
+            ExpandedBar.Visibility    = Visibility.Collapsed;
+            ViolationPanel.Visibility = Visibility.Collapsed;
             ExpandedBar.BeginAnimation(OpacityProperty, null);
             ExpandedBar.Opacity = 1;
 
@@ -227,10 +274,10 @@ public partial class OverlayWindow : Window
     }
 
     private void SessionsBtn_Click(object sender, RoutedEventArgs e) =>
-        NavigateMainWindow(1);
+        NavigateMainWindow(0); // Sessions is now the first (index 0) tab
 
     private void SettingsBtn_Click(object sender, RoutedEventArgs e) =>
-        NavigateMainWindow(3);
+        ((App)App.Current).GetSettingsWindow().Show();
 
     private static void NavigateMainWindow(int tabIndex)
     {

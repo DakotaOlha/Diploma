@@ -16,8 +16,9 @@ public class InputMonitorService : IInputMonitorService
     private readonly InputProcessorService _processor;
     
     private readonly WindowTitleMonitor _windowTitleMonitor;
-    private readonly ProcessMonitor _processMonitor;
-    private readonly FileSystemMonitor _fileSystemMonitor;
+    private readonly ProcessMonitor     _processMonitor;
+    private readonly FileSystemMonitor  _fileSystemMonitor;
+    private readonly BlacklistMonitor   _blacklistMonitor;
 
     private IKeyboardMouseEvents? _hook;
     private System.Threading.Timer? _idleTimer;
@@ -32,16 +33,20 @@ public class InputMonitorService : IInputMonitorService
     private static bool IsCtrlDown()  => (GetKeyState(0x11) & 0x8000) != 0;
     private static bool IsShiftDown() => (GetKeyState(0x10) & 0x8000) != 0;
     
+    public event EventHandler<string>? ViolationDetected;
+
     public InputMonitorService(ILogService logService, ModeProfileService profileService)
     {
         _logService     = logService;
         _profileService = profileService;
         _processor      = new InputProcessorService(logService, profileService);
         _currentProfile = profileService.GetProfile(RecordingMode.Personal);
-        
+
         _windowTitleMonitor = new WindowTitleMonitor(logService);
         _processMonitor     = new ProcessMonitor(logService);
         _fileSystemMonitor  = new FileSystemMonitor(logService);
+        _blacklistMonitor   = new BlacklistMonitor(logService);
+        _blacklistMonitor.ViolationDetected += (s, e) => ViolationDetected?.Invoke(s, e);
     }
 
     public bool IsRunning => _isRunning;
@@ -64,6 +69,7 @@ public class InputMonitorService : IInputMonitorService
         _windowTitleMonitor.Start(sessionId);
         _processMonitor.Start(sessionId);
         _fileSystemMonitor.Start(sessionId);
+        _blacklistMonitor.Start(sessionId);
     }
     
     public void SetMode(RecordingMode mode)
@@ -127,6 +133,7 @@ public class InputMonitorService : IInputMonitorService
         _windowTitleMonitor.Stop();
         _processMonitor.Stop();
         _fileSystemMonitor.Stop();
+        _blacklistMonitor.Stop();
     }
 
     public void Dispose()
@@ -135,5 +142,6 @@ public class InputMonitorService : IInputMonitorService
         _windowTitleMonitor.Dispose();
         _processMonitor.Dispose();
         _fileSystemMonitor.Dispose();
+        _blacklistMonitor.Dispose();
     }
 }
