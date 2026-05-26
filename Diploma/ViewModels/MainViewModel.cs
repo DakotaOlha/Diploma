@@ -181,6 +181,12 @@ public partial class MainViewModel : ObservableObject
             IsBusy     = true;
             StatusText = "Ініціалізація запису...";
 
+            var current = _settingsService.Current;
+            SelectedMode    = AvailableModes.FirstOrDefault(m => m.Mode == current.DefaultMode)
+                              ?? AvailableModes.First(m => m.Mode == RecordingMode.Personal);
+            SelectedQuality = AvailableQualities.FirstOrDefault(q => q.Quality == current.DefaultQuality)
+                              ?? CaptureQualityProfile.Medium;
+
             if (_captureService is ScreenCaptureService scs && SelectedQuality is not null)
                 scs.Quality = SelectedQuality.Quality;
 
