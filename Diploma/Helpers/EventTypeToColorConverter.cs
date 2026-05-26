@@ -34,6 +34,9 @@ public sealed class EventTypeToColorConverter : IValueConverter
         // Markers & screenshots
         ["MANUAL_MARKER"]   = Brush("#FFD54F"), // amber  ← most important
         ["SCREENSHOT"]      = Brush("#F48FB1"), // pink
+
+        // Rule violations — bright red, draws immediate attention
+        ["RULE_VIOLATION"]  = Brush("#FF1744"),
     };
 
     private static readonly SolidColorBrush Fallback = Brush("#90A4AE");
