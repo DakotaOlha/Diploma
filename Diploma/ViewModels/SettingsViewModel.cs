@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Diploma.Core.Interfaces;
 using Diploma.Core.Models;
 using Diploma.Core.Services;
+using System.ComponentModel;
 
 namespace Diploma.ViewModels;
 
@@ -21,7 +22,39 @@ public partial class SettingsViewModel : ObservableObject
     public IReadOnlyList<ModeProfile> AvailableModes { get; }
 
     [ObservableProperty] private CaptureQualityProfile? _defaultQuality;
-    [ObservableProperty] private ModeProfile?           _defaultMode;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(
+        nameof(IsOlympicDefault), nameof(IsLearningDefault),
+        nameof(IsPersonalDefault), nameof(IsWorkDefault))]
+    private ModeProfile? _defaultMode;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(
+        nameof(IsGeneralSection), nameof(IsLoggingSection),
+        nameof(IsHotkeysSection), nameof(SectionTitle))]
+    private int _selectedSection;
+
+    public bool   IsGeneralSection  => SelectedSection == 0;
+    public bool   IsLoggingSection  => SelectedSection == 1;
+    public bool   IsHotkeysSection  => SelectedSection == 2;
+    public string SectionTitle      => SelectedSection switch
+    {
+        0 => "Загальні",
+        1 => "Логування",
+        _ => "Гарячі клавіші"
+    };
+
+    public bool IsOlympicDefault  => DefaultMode?.Mode == RecordingMode.Olympic;
+    public bool IsLearningDefault => DefaultMode?.Mode == RecordingMode.Learning;
+    public bool IsPersonalDefault => DefaultMode?.Mode == RecordingMode.Personal;
+    public bool IsWorkDefault     => DefaultMode?.Mode == RecordingMode.Work;
+
+    [RelayCommand]
+    private void SelectSection(string idx)
+    {
+        if (int.TryParse(idx, out var i)) SelectedSection = i;
+    }
 
     // Learning events
     [ObservableProperty] private bool _learningClipboard;
@@ -45,7 +78,36 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _personalFileSwitch;
     [ObservableProperty] private bool _personalAutoSave;
 
-    [ObservableProperty] private string _saveStatus = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusDisplay))]
+    private string _saveStatus = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusDisplay))]
+    private bool _isDirty;
+
+    public string StatusDisplay => !string.IsNullOrEmpty(SaveStatus)
+        ? SaveStatus
+        : (IsDirty ? "Зміни не збережено" : string.Empty);
+
+    private bool _suppressDirty;
+
+    private static readonly HashSet<string> _dirtyTracked =
+    [
+        nameof(DefaultQuality), nameof(DefaultMode),
+        nameof(LearningClipboard), nameof(LearningFileSave), nameof(LearningUndo),
+        nameof(LearningRunDebug), nameof(LearningIdle),
+        nameof(WorkClipboard), nameof(WorkFileSave), nameof(WorkRunDebug), nameof(WorkIdle),
+        nameof(PersonalClipboard), nameof(PersonalFileSave), nameof(PersonalRunDebug),
+        nameof(PersonalIdle), nameof(PersonalIde), nameof(PersonalFileSwitch), nameof(PersonalAutoSave),
+    ];
+
+    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (!_suppressDirty && _dirtyTracked.Contains(e.PropertyName!))
+            IsDirty = true;
+    }
 
     public SettingsViewModel(ISettingsService settingsService, ModeProfileService profileService)
     {
@@ -59,6 +121,9 @@ public partial class SettingsViewModel : ObservableObject
 
     private void LoadFromCurrent()
     {
+        _suppressDirty = true;
+        try
+        {
         var s = _settings.Current;
 
         DefaultQuality = AvailableQualities.FirstOrDefault(q => q.Quality == s.DefaultQuality)
@@ -84,6 +149,12 @@ public partial class SettingsViewModel : ObservableObject
         PersonalIde        = s.PersonalEvents.Contains(EventTypes.IdeOpened);
         PersonalFileSwitch = s.PersonalEvents.Contains(EventTypes.FileSwitched);
         PersonalAutoSave   = s.PersonalEvents.Contains(EventTypes.FileSavedAuto);
+        }
+        finally
+        {
+            _suppressDirty = false;
+            IsDirty = false;
+        }
     }
 
     [RelayCommand]
@@ -132,7 +203,8 @@ public partial class SettingsViewModel : ObservableObject
         await _settings.SaveAsync();
         _settings.ApplyToProfileService(_profiles);
 
-        SaveStatus = "✓ Налаштування збережено";
+        IsDirty    = false;
+        SaveStatus = "✓ Збережено";
         await Task.Delay(2_500);
         SaveStatus = string.Empty;
     }
