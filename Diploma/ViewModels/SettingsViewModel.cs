@@ -21,7 +21,39 @@ public partial class SettingsViewModel : ObservableObject
     public IReadOnlyList<ModeProfile> AvailableModes { get; }
 
     [ObservableProperty] private CaptureQualityProfile? _defaultQuality;
-    [ObservableProperty] private ModeProfile?           _defaultMode;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(
+        nameof(IsOlympicDefault), nameof(IsLearningDefault),
+        nameof(IsPersonalDefault), nameof(IsWorkDefault))]
+    private ModeProfile? _defaultMode;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(
+        nameof(IsGeneralSection), nameof(IsLoggingSection),
+        nameof(IsHotkeysSection), nameof(SectionTitle))]
+    private int _selectedSection;
+
+    public bool   IsGeneralSection  => SelectedSection == 0;
+    public bool   IsLoggingSection  => SelectedSection == 1;
+    public bool   IsHotkeysSection  => SelectedSection == 2;
+    public string SectionTitle      => SelectedSection switch
+    {
+        0 => "Загальні",
+        1 => "Логування",
+        _ => "Гарячі клавіші"
+    };
+
+    public bool IsOlympicDefault  => DefaultMode?.Mode == RecordingMode.Olympic;
+    public bool IsLearningDefault => DefaultMode?.Mode == RecordingMode.Learning;
+    public bool IsPersonalDefault => DefaultMode?.Mode == RecordingMode.Personal;
+    public bool IsWorkDefault     => DefaultMode?.Mode == RecordingMode.Work;
+
+    [RelayCommand]
+    private void SelectSection(string idx)
+    {
+        if (int.TryParse(idx, out var i)) SelectedSection = i;
+    }
 
     // Learning events
     [ObservableProperty] private bool _learningClipboard;

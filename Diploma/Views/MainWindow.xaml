@@ -22,14 +22,6 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- Кольори палітри -->
-        <SolidColorBrush x:Key="BgDarkBrush" Color="#102020"/>
-        <SolidColorBrush x:Key="BgMidBrush" Color="#2D4C4F"/>
-        <SolidColorBrush x:Key="AccentRedBrush" Color="#83241E"/>
-        <SolidColorBrush x:Key="AccentTealBrush" Color="#78B4B7"/>
-        <SolidColorBrush x:Key="AccentGoldBrush" Color="#BD8B33"/>
-        <SolidColorBrush x:Key="TextLightBrush" Color="#D9E9E9"/>
-
         <!-- Конвертер для відображення вибраного елемента -->
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
