@@ -1,0 +1,643 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="1060" viewBox="0 0 1560 1060"
+  font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+
+  <defs>
+    <!-- Drop shadow filter for windows -->
+    <filter id="window-shadow" x="-8%" y="-8%" width="116%" height="116%">
+      <feDropShadow dx="0" dy="8" stdDeviation="24" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+    <filter id="bar-shadow" x="-10%" y="-20%" width="120%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="18" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+    <filter id="panel-shadow" x="-8%" y="-8%" width="116%" height="116%">
+      <feDropShadow dx="0" dy="4" stdDeviation="14" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+
+    <!-- Teal checkbox mark -->
+    <symbol id="check-teal" viewBox="0 0 14 14">
+      <rect width="14" height="14" rx="3" fill="#78B4B7"/>
+      <polyline points="2.5,7 5.5,10 11.5,4" fill="none" stroke="#102020" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+
+    <!-- Gray unchecked box -->
+    <symbol id="check-empty" viewBox="0 0 14 14">
+      <rect width="14" height="14" rx="3" fill="none" stroke="#506870" stroke-width="1.5"/>
+    </symbol>
+
+    <!-- Mic icon -->
+    <symbol id="icon-mic" viewBox="0 0 16 16">
+      <rect x="5" y="1" width="6" height="9" rx="3" fill="#78B4B7"/>
+      <path d="M3 8a5 5 0 0 0 10 0" fill="none" stroke="#78B4B7" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="8" y1="13" x2="8" y2="15" stroke="#78B4B7" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="5.5" y1="15" x2="10.5" y2="15" stroke="#78B4B7" stroke-width="1.5" stroke-linecap="round"/>
+    </symbol>
+
+    <!-- Doc icon -->
+    <symbol id="icon-doc" viewBox="0 0 16 16">
+      <rect x="3" y="1" width="10" height="14" rx="2" fill="none" stroke="#8BA8AA" stroke-width="1.5"/>
+      <line x1="6" y1="5" x2="10" y2="5" stroke="#8BA8AA" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="6" y1="8" x2="10" y2="8" stroke="#8BA8AA" stroke-width="1.2" stroke-linecap="round"/>
+      <line x1="6" y1="11" x2="8.5" y2="11" stroke="#8BA8AA" stroke-width="1.2" stroke-linecap="round"/>
+    </symbol>
+
+    <!-- Up arrow icon -->
+    <symbol id="icon-up" viewBox="0 0 16 16">
+      <polyline points="4,10 8,6 12,10" fill="none" stroke="#8BA8AA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+
+    <!-- Dropdown arrow -->
+    <symbol id="icon-chevron-down" viewBox="0 0 12 12">
+      <polyline points="2,4 6,8 10,4" fill="none" stroke="#78B4B7" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+
+    <!-- Stop square icon -->
+    <symbol id="icon-stop" viewBox="0 0 16 16">
+      <rect x="3" y="3" width="10" height="10" rx="2" fill="#D9E9E9"/>
+    </symbol>
+  </defs>
+
+  <!-- ============================================================ -->
+  <!-- CANVAS BACKGROUND -->
+  <!-- ============================================================ -->
+  <rect width="1560" height="1060" fill="#0A1515"/>
+
+  <!-- ============================================================ -->
+  <!-- PAGE TITLE -->
+  <!-- ============================================================ -->
+  <g id="page-title">
+    <text x="780" y="42" text-anchor="middle" font-size="20" font-weight="700" fill="#D9E9E9" letter-spacing="0.5">AlgoReplay — Редизайн UI</text>
+    <text x="780" y="62" text-anchor="middle" font-size="11" fill="#506870" letter-spacing="1.5">FIGMA-READY DESIGN MOCKUP · CANVAS 1560×1060</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- COLOR SWATCHES ROW -->
+  <!-- ============================================================ -->
+  <g id="color-swatches" transform="translate(40, 76)">
+    <!-- Swatch 1 -->
+    <rect x="0" y="0" width="36" height="20" rx="4" fill="#102020"/>
+    <text x="18" y="30" text-anchor="middle" font-size="8" fill="#506870">#102020</text>
+    <!-- Swatch 2 -->
+    <rect x="44" y="0" width="36" height="20" rx="4" fill="#0D1919"/>
+    <text x="62" y="30" text-anchor="middle" font-size="8" fill="#506870">#0D1919</text>
+    <!-- Swatch 3 -->
+    <rect x="88" y="0" width="36" height="20" rx="4" fill="#162828"/>
+    <text x="106" y="30" text-anchor="middle" font-size="8" fill="#506870">#162828</text>
+    <!-- Swatch 4 -->
+    <rect x="132" y="0" width="36" height="20" rx="4" fill="#1A3030"/>
+    <text x="150" y="30" text-anchor="middle" font-size="8" fill="#506870">#1A3030</text>
+    <!-- Swatch 5 -->
+    <rect x="176" y="0" width="36" height="20" rx="4" fill="#1E3636"/>
+    <text x="194" y="30" text-anchor="middle" font-size="8" fill="#506870">#1E3636</text>
+    <!-- Swatch 6 -->
+    <rect x="220" y="0" width="36" height="20" rx="4" fill="#2D4C4F"/>
+    <text x="238" y="30" text-anchor="middle" font-size="8" fill="#506870">#2D4C4F</text>
+    <!-- Swatch 7 -->
+    <rect x="264" y="0" width="36" height="20" rx="4" fill="#83241E"/>
+    <text x="282" y="30" text-anchor="middle" font-size="8" fill="#506870">#83241E</text>
+    <!-- Swatch 8 -->
+    <rect x="308" y="0" width="36" height="20" rx="4" fill="#78B4B7"/>
+    <text x="326" y="30" text-anchor="middle" font-size="8" fill="#506870">#78B4B7</text>
+    <!-- Swatch 9 -->
+    <rect x="352" y="0" width="36" height="20" rx="4" fill="#BD8B33"/>
+    <text x="370" y="30" text-anchor="middle" font-size="8" fill="#506870">#BD8B33</text>
+    <!-- Swatch 10 -->
+    <rect x="396" y="0" width="36" height="20" rx="4" fill="#D9E9E9"/>
+    <text x="414" y="30" text-anchor="middle" font-size="8" fill="#506870">#D9E9E9</text>
+    <!-- Swatch 11 -->
+    <rect x="440" y="0" width="36" height="20" rx="4" fill="#8BA8AA"/>
+    <text x="458" y="30" text-anchor="middle" font-size="8" fill="#506870">#8BA8AA</text>
+    <!-- Swatch 12 -->
+    <rect x="484" y="0" width="36" height="20" rx="4" fill="#506870"/>
+    <text x="502" y="30" text-anchor="middle" font-size="8" fill="#506870">#506870</text>
+    <!-- Label -->
+    <text x="540" y="14" font-size="10" font-weight="600" fill="#506870" letter-spacing="1">COLOR PALETTE</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- FRAME 1: MAIN WINDOW — IDLE STATE -->
+  <!-- Position: x=40, y=120 (after swatches) -->
+  <!-- Size: 520×660 -->
+  <!-- ============================================================ -->
+  <g id="frame1-main-window">
+    <!-- Frame label -->
+    <text x="40" y="120" font-size="11" font-weight="600" fill="#506870" letter-spacing="1.5">ГОЛОВНЕ ВІКНО / Не записує</text>
+
+    <!-- Window chrome -->
+    <rect x="40" y="130" width="520" height="660" rx="14" fill="#102020" stroke="#2D4C4F" stroke-width="1" filter="url(#window-shadow)"/>
+
+    <!-- ======== TITLE BAR ======== -->
+    <g id="f1-titlebar">
+      <rect x="40" y="130" width="520" height="46" rx="14" fill="#0D1919"/>
+      <!-- Flatten bottom corners of title bar -->
+      <rect x="40" y="158" width="520" height="18" fill="#0D1919"/>
+      <!-- Bottom border of title bar -->
+      <line x1="40" y1="176" x2="560" y2="176" stroke="#2D4C4F" stroke-width="1"/>
+
+      <!-- Logo circle + app name -->
+      <circle cx="62" cy="153" r="8" fill="#78B4B7" opacity="0.9"/>
+      <text x="57" y="157" font-size="8" font-weight="700" fill="#102020">AR</text>
+      <text x="78" y="157" font-size="13" font-weight="700" fill="#D9E9E9" letter-spacing="0.3">AlgoReplay</text>
+
+      <!-- Badge: sessions -->
+      <rect x="172" y="144" width="78" height="18" rx="9" fill="#1E3636"/>
+      <text x="211" y="156" text-anchor="middle" font-size="10" fill="#78B4B7">📋 12 сесій</text>
+
+      <!-- Badge: time -->
+      <rect x="258" y="144" width="70" height="18" rx="9" fill="#1E3636"/>
+      <text x="293" y="156" text-anchor="middle" font-size="10" fill="#BD8B33">◷ 4h 32m</text>
+
+      <!-- Window controls -->
+      <!-- Minimize -->
+      <circle cx="490" cy="153" r="8" fill="#2D4C4F" opacity="0.7"/>
+      <line x1="486" y1="153" x2="494" y2="153" stroke="#8BA8AA" stroke-width="1.5" stroke-linecap="round"/>
+      <!-- Maximize -->
+      <circle cx="514" cy="153" r="8" fill="#2D4C4F" opacity="0.7"/>
+      <rect x="510" y="149" width="8" height="8" rx="1" fill="none" stroke="#8BA8AA" stroke-width="1.3"/>
+      <!-- Close -->
+      <circle cx="538" cy="153" r="8" fill="#83241E" opacity="0.85"/>
+      <line x1="534" y1="149" x2="542" y2="157" stroke="#D9E9E9" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="542" y1="149" x2="534" y2="157" stroke="#D9E9E9" stroke-width="1.5" stroke-linecap="round"/>
+    </g>
+
+    <!-- ======== STATUS CARD ======== -->
+    <g id="f1-status-card">
+      <rect x="64" y="192" width="472" height="160" rx="12" fill="#162828" stroke="#2D4C4F" stroke-width="1"/>
+
+      <!-- Title -->
+      <text x="88" y="222" font-size="20" font-weight="700" fill="#D9E9E9">AlgoReplay</text>
+      <text x="88" y="240" font-size="12" fill="#8BA8AA">Готовий до запису</text>
+
+      <!-- Status indicator dot -->
+      <circle cx="516" cy="216" r="5" fill="#506870"/>
+      <circle cx="516" cy="216" r="3" fill="#8BA8AA"/>
+
+      <!-- Divider -->
+      <line x1="80" y1="254" x2="528" y2="254" stroke="#2D4C4F" stroke-width="1"/>
+
+      <!-- Timer -->
+      <text x="300" y="296" text-anchor="middle" font-size="36" font-weight="700" fill="#78B4B7" font-family="'Courier New', Courier, monospace" letter-spacing="2">00:00:00</text>
+
+      <!-- Bottom badges -->
+      <rect x="186" y="308" width="112" height="24" rx="12" fill="#1E3636" stroke="#78B4B7" stroke-width="1" opacity="0.7"/>
+      <text x="242" y="323" text-anchor="middle" font-size="11" fill="#78B4B7">🙂 Особистий</text>
+
+      <rect x="310" y="308" width="100" height="24" rx="12" fill="#1E3636" stroke="#78B4B7" stroke-width="1" opacity="0.7"/>
+      <text x="360" y="323" text-anchor="middle" font-size="11" fill="#78B4B7">High · 30fps</text>
+    </g>
+
+    <!-- ======== MIC CARD ======== -->
+    <g id="f1-mic-card">
+      <rect x="64" y="368" width="472" height="54" rx="10" fill="#162828" stroke="#2D4C4F" stroke-width="1"/>
+
+      <!-- Checkbox checked -->
+      <use href="#check-teal" x="80" y="381" width="14" height="14"/>
+
+      <!-- Mic icon -->
+      <use href="#icon-mic" x="102" y="379" width="16" height="16"/>
+
+      <!-- Label -->
+      <text x="126" y="393" font-size="13" font-weight="500" fill="#D9E9E9">Мікрофон</text>
+
+      <!-- Device selector -->
+      <rect x="292" y="379" width="220" height="28" rx="7" fill="#1E3636" stroke="#2D4C4F" stroke-width="1"/>
+      <text x="305" y="397" font-size="11" fill="#8BA8AA">Microphone (Logitech...)</text>
+      <use href="#icon-chevron-down" x="494" y="385" width="12" height="12"/>
+    </g>
+
+    <!-- ======== ACTION BUTTONS ======== -->
+    <g id="f1-action-buttons">
+      <!-- Start Recording button -->
+      <rect x="64" y="438" width="220" height="50" rx="10" fill="#83241E" stroke="#BD8B33" stroke-width="1.5"/>
+      <text x="174" y="459" text-anchor="middle" font-size="14" font-weight="700" fill="#D9E9E9">▶ Почати запис</text>
+      <text x="174" y="477" text-anchor="middle" font-size="10" fill="#D9E9E9" opacity="0.7">Розпочати нову сесію</text>
+
+      <!-- Marker button -->
+      <rect x="294" y="438" width="116" height="50" rx="10" fill="#162828" stroke="#2D4C4F" stroke-width="1"/>
+      <text x="352" y="468" text-anchor="middle" font-size="13" fill="#8BA8AA">📌 Маркер</text>
+
+      <!-- Screenshot button -->
+      <rect x="420" y="438" width="116" height="50" rx="10" fill="#162828" stroke="#2D4C4F" stroke-width="1"/>
+      <text x="478" y="468" text-anchor="middle" font-size="13" fill="#8BA8AA">📷 Скрін</text>
+    </g>
+
+    <!-- ======== STATS STRIP ======== -->
+    <g id="f1-stats-strip">
+      <rect x="64" y="504" width="472" height="56" rx="10" fill="#162828" stroke="#2D4C4F" stroke-width="1"/>
+
+      <!-- Col 1: Sessions -->
+      <text x="140" y="524" text-anchor="middle" font-size="9" font-weight="600" fill="#506870" letter-spacing="0.8">СЕСІЙ</text>
+      <text x="140" y="546" text-anchor="middle" font-size="18" font-weight="700" fill="#78B4B7">12</text>
+
+      <!-- Divider 1 -->
+      <line x1="216" y1="514" x2="216" y2="550" stroke="#2D4C4F" stroke-width="1"/>
+
+      <!-- Col 2: Today -->
+      <text x="264" y="524" text-anchor="middle" font-size="9" font-weight="600" fill="#506870" letter-spacing="0.8">СЬОГОДНІ</text>
+      <text x="264" y="546" text-anchor="middle" font-size="18" font-weight="700" fill="#78B4B7">3</text>
+
+      <!-- Divider 2 -->
+      <line x1="320" y1="514" x2="320" y2="550" stroke="#2D4C4F" stroke-width="1"/>
+
+      <!-- Col 3: Total time -->
+      <text x="390" y="524" text-anchor="middle" font-size="9" font-weight="600" fill="#506870" letter-spacing="0.8">ЗАГАЛЬНИЙ ЧАС</text>
+      <text x="390" y="546" text-anchor="middle" font-size="16" font-weight="700" fill="#BD8B33">4h 32m</text>
+
+      <!-- Divider 3 -->
+      <line x1="458" y1="514" x2="458" y2="550" stroke="#2D4C4F" stroke-width="1"/>
+
+      <!-- Col 4: Events -->
+      <text x="496" y="524" text-anchor="middle" font-size="9" font-weight="600" fill="#506870" letter-spacing="0.8">ПОДІЙ</text>
+      <text x="496" y="546" text-anchor="middle" font-size="18" font-weight="700" fill="#78B4B7">248</text>
+    </g>
+
+    <!-- ======== RECENT SESSIONS ======== -->
+    <g id="f1-recent-sessions">
+      <!-- Section label -->
+      <text x="64" y="582" font-size="10" font-weight="600" fill="#506870" letter-spacing="1.5">ОСТАННІ СЕСІЇ</text>
+
+      <!-- Session row 1 -->
+      <rect x="64" y="590" width="472" height="44" rx="8" fill="#1A2E2E"/>
+      <!-- Red dot -->
+      <circle cx="86" cy="612" r="5" fill="#83241E" opacity="0.3"/>
+      <circle cx="86" cy="612" r="3" fill="#83241E"/>
+      <!-- Session info -->
+      <text x="102" y="608" font-size="12" font-weight="600" fill="#D9E9E9">Session 25.05 14:32</text>
+      <text x="102" y="623" font-size="10" fill="#8BA8AA">🙂 Особистий · 24fps · 14 подій</text>
+      <!-- Duration + date -->
+      <text x="504" y="608" text-anchor="end" font-size="12" font-weight="600" fill="#78B4B7">▶ 23:41</text>
+      <text x="504" y="623" text-anchor="end" font-size="10" fill="#506870">Сьогодні</text>
+
+      <!-- Session row 2 -->
+      <rect x="64" y="642" width="472" height="44" rx="8" fill="#162828" stroke="#2D4C4F" stroke-width="1" opacity="0.7"/>
+      <!-- Blue dot -->
+      <circle cx="86" cy="664" r="5" fill="#4A7FBF" opacity="0.3"/>
+      <circle cx="86" cy="664" r="3" fill="#5B9BD5"/>
+      <!-- Session info -->
+      <text x="102" y="660" font-size="12" font-weight="600" fill="#D9E9E9">Session 24.05 10:15</text>
+      <text x="102" y="675" font-size="10" fill="#8BA8AA">💼 Робота · 30fps · 32 події</text>
+      <!-- Duration + date -->
+      <text x="504" y="660" text-anchor="end" font-size="12" font-weight="600" fill="#78B4B7">▶ 01:12:08</text>
+      <text x="504" y="675" text-anchor="end" font-size="10" fill="#506870">Вчора</text>
+
+      <!-- See all link -->
+      <text x="300" y="710" text-anchor="middle" font-size="12" fill="#78B4B7" text-decoration="underline">Переглянути всі сесії →</text>
+
+      <!-- Bottom status bar -->
+      <rect x="40" y="750" width="520" height="40" rx="0" fill="#0D1919"/>
+      <rect x="40" y="750" width="520" height="40" rx="14" fill="#0D1919"/>
+      <rect x="40" y="750" width="520" height="20" fill="#0D1919"/>
+      <line x1="40" y1="750" x2="560" y2="750" stroke="#2D4C4F" stroke-width="1"/>
+      <circle cx="60" cy="770" r="4" fill="#78B4B7" opacity="0.6"/>
+      <text x="72" y="774" font-size="10" fill="#506870">Готовий · v1.4.2</text>
+      <text x="548" y="774" text-anchor="end" font-size="10" fill="#506870">AlgoReplay</text>
+    </g>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- FRAME 2: FLOATING RECORDING BAR -->
+  <!-- Position: x=600, y=130 -->
+  <!-- Size: 480×72 -->
+  <!-- ============================================================ -->
+  <g id="frame2-recording-bar">
+    <!-- Frame label -->
+    <text x="600" y="120" font-size="11" font-weight="600" fill="#506870" letter-spacing="1.5">ПАНЕЛЬ ЗАПИСУ / Zoom-стиль</text>
+
+    <!-- Pill bar background -->
+    <rect x="600" y="130" width="480" height="72" rx="36" fill="#102020" stroke="#2D4C4F" stroke-width="1.5" filter="url(#bar-shadow)"/>
+
+    <!-- Recording indicator -->
+    <!-- Outer pulse circle -->
+    <circle cx="636" cy="166" r="14" fill="#83241E" opacity="0.18"/>
+    <!-- Inner solid dot -->
+    <circle cx="636" cy="166" r="7" fill="#83241E"/>
+    <circle cx="636" cy="166" r="4" fill="#FF3030"/>
+
+    <!-- REC label -->
+    <text x="636" y="189" text-anchor="middle" font-size="8" font-weight="700" fill="#83241E" letter-spacing="1">REC</text>
+
+    <!-- Timer -->
+    <text x="718" y="161" text-anchor="middle" font-size="18" font-weight="700" fill="#D9E9E9" font-family="'Courier New', Courier, monospace" letter-spacing="1.5">00:23:45</text>
+
+    <!-- Vertical divider 1 -->
+    <line x1="762" y1="142" x2="762" y2="190" stroke="#2D4C4F" stroke-width="1"/>
+
+    <!-- Stop button -->
+    <rect x="772" y="146" width="80" height="40" rx="10" fill="#83241E"/>
+    <use href="#icon-stop" x="784" y="154" width="16" height="16"/>
+    <text x="834" y="170" text-anchor="end" font-size="13" font-weight="600" fill="#D9E9E9">Стоп</text>
+
+    <!-- Marker button -->
+    <rect x="862" y="146" width="84" height="40" rx="10" fill="#1E3636" stroke="#2D4C4F" stroke-width="1"/>
+    <text x="904" y="170" text-anchor="middle" font-size="12" fill="#8BA8AA">📌 Маркер</text>
+
+    <!-- Screenshot button -->
+    <rect x="956" y="146" width="76" height="40" rx="10" fill="#1E3636" stroke="#2D4C4F" stroke-width="1"/>
+    <text x="994" y="170" text-anchor="middle" font-size="12" fill="#8BA8AA">📷 Скрін</text>
+
+    <!-- Vertical divider 2 -->
+    <line x1="1042" y1="142" x2="1042" y2="190" stroke="#2D4C4F" stroke-width="1"/>
+
+    <!-- Sessions icon button -->
+    <use href="#icon-doc" x="1054" y="158" width="16" height="16"/>
+
+    <!-- Collapse button -->
+    <use href="#icon-up" x="1044" y="157" width="16" height="16" transform="translate(32,0)"/>
+
+    <!-- Close area filler -->
+    <text x="1068" y="180" text-anchor="middle" font-size="8" fill="#506870">⟨</text>
+
+  </g>
+
+  <!-- Annotation below bar -->
+  <g id="frame2-annotation">
+    <text x="600" y="218" font-size="11" fill="#506870">✦ При кліку на ‹ — мінімізується до іконки в треї</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- FRAME 3: SETTINGS WINDOW -->
+  <!-- Position: x=600, y=240 -->
+  <!-- Size: 940×600 -->
+  <!-- ============================================================ -->
+  <g id="frame3-settings-window">
+    <!-- Frame label -->
+    <text x="600" y="232" font-size="11" font-weight="600" fill="#506870" letter-spacing="1.5">ВІКНО НАЛАШТУВАНЬ</text>
+
+    <!-- Window outer shell -->
+    <rect x="600" y="242" width="940" height="600" rx="16" fill="#102020" stroke="#2D4C4F" stroke-width="1" filter="url(#window-shadow)"/>
+
+    <!-- ======== LEFT SIDEBAR ======== -->
+    <g id="f3-sidebar">
+      <rect x="600" y="242" width="220" height="600" rx="16" fill="#0D1919"/>
+      <!-- Flatten right corners -->
+      <rect x="780" y="242" width="40" height="600" fill="#0D1919"/>
+
+      <!-- Sidebar header -->
+      <text x="620" y="284" font-size="15" font-weight="700" fill="#D9E9E9">⚙ Налаштування</text>
+
+      <!-- Divider -->
+      <line x1="610" y1="298" x2="810" y2="298" stroke="#2D4C4F" stroke-width="1"/>
+
+      <!-- Nav: General (selected) -->
+      <rect x="610" y="308" width="200" height="40" rx="8" fill="#1E3636"/>
+      <!-- Left accent bar -->
+      <rect x="610" y="308" width="3" height="40" rx="1.5" fill="#78B4B7"/>
+      <text x="634" y="333" font-size="13" font-weight="600" fill="#78B4B7">⚙ Загальні</text>
+
+      <!-- Nav: Logging -->
+      <rect x="610" y="356" width="200" height="40" rx="8" fill="transparent"/>
+      <text x="634" y="381" font-size="13" fill="#8BA8AA">📋 Логування</text>
+
+      <!-- Nav: Hotkeys -->
+      <rect x="610" y="404" width="200" height="40" rx="8" fill="transparent"/>
+      <text x="634" y="429" font-size="13" fill="#8BA8AA">⌨ Гарячі клавіші</text>
+
+      <!-- Version -->
+      <text x="710" y="820" text-anchor="middle" font-size="10" fill="#506870" opacity="0.6">v1.4.2-beta</text>
+    </g>
+
+    <!-- ======== RIGHT CONTENT AREA ======== -->
+    <g id="f3-content">
+      <!-- Title bar area -->
+      <rect x="820" y="242" width="720" height="60" rx="0" fill="#0D1919"/>
+      <rect x="820" y="242" width="720" height="60" rx="16" fill="#0D1919"/>
+      <rect x="820" y="272" width="720" height="30" fill="#0D1919"/>
+      <!-- Close button area -->
+      <circle cx="1518" cy="265" r="8" fill="#83241E" opacity="0.85"/>
+      <line x1="1514" y1="261" x2="1522" y2="269" stroke="#D9E9E9" stroke-width="1.5" stroke-linecap="round"/>
+      <line x1="1522" y1="261" x2="1514" y2="269" stroke="#D9E9E9" stroke-width="1.5" stroke-linecap="round"/>
+      <!-- Minimize -->
+      <circle cx="1494" cy="265" r="8" fill="#2D4C4F" opacity="0.7"/>
+      <line x1="1490" y1="265" x2="1498" y2="265" stroke="#8BA8AA" stroke-width="1.5" stroke-linecap="round"/>
+
+      <!-- Section title -->
+      <text x="844" y="278" font-size="18" font-weight="700" fill="#D9E9E9">Загальні</text>
+      <!-- Divider -->
+      <line x1="820" y1="294" x2="1540" y2="294" stroke="#2D4C4F" stroke-width="1"/>
+
+      <!-- Row 1: Quality -->
+      <g id="f3-quality-row">
+        <!-- Left label -->
+        <text x="844" y="330" font-size="13" font-weight="500" fill="#D9E9E9">Якість за замовчуванням</text>
+        <text x="844" y="347" font-size="11" fill="#8BA8AA">Застосовується до нових записів</text>
+
+        <!-- Right selector -->
+        <rect x="1268" y="318" width="250" height="36" rx="8" fill="#162828" stroke="#2D4C4F" stroke-width="1"/>
+        <text x="1283" y="341" font-size="12" fill="#D9E9E9">High — 30 fps, native</text>
+        <use href="#icon-chevron-down" x="1497" y="325" width="12" height="12"/>
+
+        <!-- Divider -->
+        <line x1="844" y1="362" x2="1524" y2="362" stroke="#2D4C4F" stroke-width="1" opacity="0.6"/>
+      </g>
+
+      <!-- Row 2: Mode -->
+      <g id="f3-mode-row">
+        <text x="844" y="394" font-size="13" font-weight="500" fill="#D9E9E9">Режим за замовчуванням</text>
+        <text x="844" y="411" font-size="11" fill="#8BA8AA">Вибирається при запуску</text>
+
+        <!-- Right selector -->
+        <rect x="1268" y="382" width="250" height="36" rx="8" fill="#162828" stroke="#2D4C4F" stroke-width="1"/>
+        <text x="1283" y="405" font-size="12" fill="#D9E9E9">🙂 Особистий</text>
+        <use href="#icon-chevron-down" x="1497" y="389" width="12" height="12"/>
+      </g>
+
+      <!-- Section Header: Logging -->
+      <text x="844" y="442" font-size="10" font-weight="600" fill="#506870" letter-spacing="1.5">НАЛАШТУВАННЯ ЛОГУВАННЯ</text>
+      <line x1="844" y1="452" x2="1524" y2="452" stroke="#2D4C4F" stroke-width="1" opacity="0.5"/>
+
+      <!-- Mode Cards (3 cards) -->
+      <!-- Card 1: Olympic -->
+      <g id="f3-card-olympic">
+        <rect x="844" y="460" width="210" height="204" rx="10" fill="#0D1F1F" stroke="#2D4C4F" stroke-width="1"/>
+        <text x="866" y="484" font-size="13" font-weight="700" fill="#BD8B33">🏆 Олімпіада</text>
+        <!-- Badge: fixed mode -->
+        <rect x="866" y="492" width="88" height="18" rx="9" fill="#1E3636"/>
+        <text x="910" y="504" text-anchor="middle" font-size="9" fill="#8BA8AA">Фіксований режим</text>
+        <!-- Checklist static -->
+        <use href="#check-teal" x="866" y="520" width="12" height="12"/>
+        <text x="884" y="531" font-size="11" fill="#8BA8AA">Буфер</text>
+        <use href="#check-teal" x="866" y="538" width="12" height="12"/>
+        <text x="884" y="549" font-size="11" fill="#8BA8AA">Збереження</text>
+        <use href="#check-teal" x="866" y="556" width="12" height="12"/>
+        <text x="884" y="567" font-size="11" fill="#8BA8AA">Run/Debug</text>
+        <use href="#check-teal" x="866" y="574" width="12" height="12"/>
+        <text x="884" y="585" font-size="11" fill="#8BA8AA">Бездіяльність</text>
+        <use href="#check-teal" x="866" y="592" width="12" height="12"/>
+        <text x="884" y="603" font-size="11" fill="#8BA8AA">Маркери</text>
+        <use href="#check-teal" x="866" y="610" width="12" height="12"/>
+        <text x="884" y="621" font-size="11" fill="#8BA8AA">Скріншоти</text>
+        <!-- Not editable pill -->
+        <rect x="866" y="636" width="100" height="18" rx="9" fill="#2D4C4F" opacity="0.6"/>
+        <text x="916" y="648" text-anchor="middle" font-size="9" fill="#506870">Не редагується</text>
+      </g>
+
+      <!-- Card 2: Personal (active) -->
+      <g id="f3-card-personal">
+        <rect x="1068" y="460" width="210" height="204" rx="10" fill="#1A3030" stroke="#78B4B7" stroke-width="1.5"/>
+        <!-- Active indicator dot top right -->
+        <circle cx="1264" cy="472" r="5" fill="#78B4B7"/>
+        <text x="1090" y="484" font-size="13" font-weight="700" fill="#78B4B7">🙂 Особистий</text>
+        <!-- Checkboxes teal -->
+        <use href="#check-teal" x="1090" y="500" width="12" height="12"/>
+        <text x="1108" y="511" font-size="11" fill="#D9E9E9">Буфер</text>
+        <use href="#check-teal" x="1090" y="518" width="12" height="12"/>
+        <text x="1108" y="529" font-size="11" fill="#D9E9E9">Збереження</text>
+        <use href="#check-teal" x="1090" y="536" width="12" height="12"/>
+        <text x="1108" y="547" font-size="11" fill="#D9E9E9">Run/Debug</text>
+        <use href="#check-teal" x="1090" y="554" width="12" height="12"/>
+        <text x="1108" y="565" font-size="11" fill="#D9E9E9">Бездіяльність</text>
+        <use href="#check-teal" x="1090" y="572" width="12" height="12"/>
+        <text x="1108" y="583" font-size="11" fill="#D9E9E9">IDE події</text>
+        <!-- Unchecked -->
+        <use href="#check-empty" x="1090" y="590" width="12" height="12"/>
+        <text x="1108" y="601" font-size="11" fill="#506870">Авто-збереження</text>
+        <!-- Bottom text -->
+        <text x="1090" y="648" font-size="10" fill="#78B4B7">+ Маркери · Скріншоти</text>
+      </g>
+
+      <!-- Card 3: Work -->
+      <g id="f3-card-work">
+        <rect x="1292" y="460" width="210" height="204" rx="10" fill="#162828" stroke="#2D4C4F" stroke-width="1"/>
+        <text x="1314" y="484" font-size="13" font-weight="700" fill="#D9E9E9">💼 Робота</text>
+        <!-- Checkboxes -->
+        <use href="#check-teal" x="1314" y="500" width="12" height="12"/>
+        <text x="1332" y="511" font-size="11" fill="#D9E9E9">Буфер</text>
+        <use href="#check-teal" x="1314" y="518" width="12" height="12"/>
+        <text x="1332" y="529" font-size="11" fill="#D9E9E9">Збереження</text>
+        <use href="#check-teal" x="1314" y="536" width="12" height="12"/>
+        <text x="1332" y="547" font-size="11" fill="#D9E9E9">Run/Debug</text>
+        <!-- Unchecked -->
+        <use href="#check-empty" x="1314" y="554" width="12" height="12"/>
+        <text x="1332" y="565" font-size="11" fill="#506870">Бездіяльність</text>
+        <text x="1314" y="648" font-size="10" fill="#506870">+ Маркери · Скріншоти</text>
+      </g>
+
+      <!-- Save Button -->
+      <g id="f3-save-button">
+        <rect x="844" y="678" width="658" height="44" rx="10" fill="#1E3636" stroke="#78B4B7" stroke-width="1.5"/>
+        <text x="1173" y="705" text-anchor="middle" font-size="14" font-weight="700" fill="#78B4B7">💾 Зберегти налаштування</text>
+      </g>
+
+      <!-- Bottom status -->
+      <rect x="820" y="782" width="720" height="60" rx="16" fill="#0D1919"/>
+      <rect x="820" y="782" width="720" height="30" fill="#0D1919"/>
+      <line x1="820" y1="782" x2="1540" y2="782" stroke="#2D4C4F" stroke-width="1"/>
+      <text x="844" y="810" font-size="10" fill="#506870">Зміни не збережено</text>
+      <circle cx="1000" cy="806" r="3" fill="#BD8B33" opacity="0.8"/>
+    </g>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- FRAME 4: MARKERS SIDE PANEL -->
+  <!-- Position: x=40, y=830 -->
+  <!-- Size: 290×260 -->
+  <!-- ============================================================ -->
+  <g id="frame4-markers-panel">
+    <!-- Frame label -->
+    <text x="40" y="822" font-size="11" font-weight="600" fill="#506870" letter-spacing="1.5">БОКОВА ПАНЕЛЬ МАРКЕРІВ</text>
+
+    <!-- Panel shell -->
+    <rect x="40" y="832" width="290" height="260" rx="12" fill="#162828" stroke="#2D4C4F" stroke-width="1" filter="url(#panel-shadow)"/>
+
+    <!-- ======== HEADER ======== -->
+    <g id="f4-header">
+      <rect x="40" y="832" width="290" height="46" rx="12" fill="#0D1919"/>
+      <rect x="40" y="860" width="290" height="18" fill="#0D1919"/>
+      <line x1="40" y1="878" x2="330" y2="878" stroke="#2D4C4F" stroke-width="1"/>
+
+      <text x="62" y="861" font-size="13" font-weight="700" fill="#D9E9E9">Маркери</text>
+
+      <!-- Badge "3" -->
+      <circle cx="114" cy="856" r="9" fill="#78B4B7"/>
+      <text x="114" y="860" text-anchor="middle" font-size="10" font-weight="700" fill="#102020">3</text>
+
+      <!-- + Add button -->
+      <rect x="238" y="847" width="72" height="22" rx="11" fill="transparent" stroke="#78B4B7" stroke-width="1"/>
+      <text x="274" y="862" text-anchor="middle" font-size="11" fill="#78B4B7">+ Додати</text>
+    </g>
+
+    <!-- ======== MARKER ITEMS ======== -->
+
+    <!-- Item 1 -->
+    <g id="f4-marker-1">
+      <rect x="52" y="886" width="266" height="44" rx="8" fill="#162828" stroke="#2D4C4F" stroke-width="1"/>
+      <!-- Timestamp badge -->
+      <rect x="62" y="896" width="64" height="18" rx="5" fill="#1E3636"/>
+      <text x="94" y="908" text-anchor="middle" font-size="9" font-weight="600" fill="#78B4B7" font-family="'Courier New', Courier, monospace">00:03:22</text>
+      <!-- Info -->
+      <text x="136" y="905" font-size="11" font-weight="500" fill="#D9E9E9">Почав задачу A</text>
+      <text x="136" y="919" font-size="9" fill="#8BA8AA">📌 Маркер</text>
+      <!-- Delete X -->
+      <text x="304" y="912" text-anchor="middle" font-size="12" fill="#506870">✕</text>
+    </g>
+
+    <!-- Item 2 -->
+    <g id="f4-marker-2">
+      <rect x="52" y="936" width="266" height="44" rx="8" fill="#162828" stroke="#2D4C4F" stroke-width="1"/>
+      <!-- Timestamp badge gold -->
+      <rect x="62" y="946" width="64" height="18" rx="5" fill="#1E3636"/>
+      <text x="94" y="958" text-anchor="middle" font-size="9" font-weight="600" fill="#BD8B33" font-family="'Courier New', Courier, monospace">00:12:07</text>
+      <!-- Info -->
+      <text x="136" y="955" font-size="11" font-weight="500" fill="#D9E9E9">Зупинка на обід</text>
+      <text x="136" y="969" font-size="9" fill="#8BA8AA">📌 Маркер</text>
+      <!-- Delete X -->
+      <text x="304" y="962" text-anchor="middle" font-size="12" fill="#506870">✕</text>
+    </g>
+
+    <!-- Item 3: screenshot type -->
+    <g id="f4-marker-3">
+      <rect x="52" y="986" width="266" height="44" rx="8" fill="#162828" stroke="#2D4C4F" stroke-width="1"/>
+      <!-- Timestamp badge gold -->
+      <rect x="62" y="996" width="64" height="18" rx="5" fill="#1E3636"/>
+      <text x="94" y="1008" text-anchor="middle" font-size="9" font-weight="600" fill="#BD8B33" font-family="'Courier New', Courier, monospace">00:18:44</text>
+      <!-- Info -->
+      <text x="136" y="1005" font-size="11" font-weight="500" fill="#D9E9E9">screenshot_184400.png</text>
+      <text x="136" y="1019" font-size="9" fill="#BD8B33">📷 Скріншот</text>
+      <!-- Delete X -->
+      <text x="304" y="1012" text-anchor="middle" font-size="12" fill="#506870">✕</text>
+    </g>
+
+    <!-- ======== QUICK ADD FOOTER ======== -->
+    <g id="f4-quick-add">
+      <rect x="52" y="1036" width="266" height="36" rx="8" fill="#0D1919" stroke="#2D4C4F" stroke-width="1"/>
+      <text x="70" y="1058" font-size="11" fill="#506870">Додати маркер...</text>
+      <!-- Enter button -->
+      <rect x="284" y="1040" width="26" height="28" rx="8" fill="#78B4B7"/>
+      <text x="297" y="1058" text-anchor="middle" font-size="13" font-weight="700" fill="#102020">↵</text>
+    </g>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- DECORATIVE CONNECTOR ARROWS -->
+  <!-- ============================================================ -->
+  <g id="connector-annotations" opacity="0.4">
+    <!-- Arrow from main window to recording bar -->
+    <path d="M 300 790 Q 300 820 560 166" fill="none" stroke="#78B4B7" stroke-width="1" stroke-dasharray="4,4" marker-end="url(#arrow-teal)"/>
+  </g>
+
+  <!-- Arrow marker def -->
+  <defs>
+    <marker id="arrow-teal" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#78B4B7"/>
+    </marker>
+  </defs>
+
+  <!-- ============================================================ -->
+  <!-- ADDITIONAL ANNOTATION LABELS -->
+  <!-- ============================================================ -->
+  <g id="annotations" font-size="10" fill="#506870">
+    <!-- Frame size labels -->
+    <text x="300" y="108" text-anchor="middle">520 × 660 px</text>
+    <text x="840" y="108" text-anchor="middle">480 × 72 px</text>
+    <text x="1070" y="232" text-anchor="middle">940 × 600 px</text>
+    <text x="185" y="812" text-anchor="middle">290 × 260 px</text>
+
+    <!-- Recording state indicator (recording bar context note) -->
+    <text x="600" y="228" font-size="10" fill="#83241E" opacity="0.7">● Активна сесія · 00:23:45</text>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- WATERMARK / SIGNATURE -->
+  <!-- ============================================================ -->
+  <text x="1520" y="1050" text-anchor="end" font-size="10" fill="#2D4C4F" opacity="0.7">AlgoReplay UI Design · 2025</text>
+
+</svg>
