@@ -7,9 +7,96 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/SkinDefault.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/Theme.xaml"/>
+                <ResourceDictionary Source="Resources/AppColors.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+            <!-- ── CheckBox with gold checkmark (used in mode cards) ── -->
+            <Style x:Key="GoldCheckBoxStyle" TargetType="CheckBox">
+                <Setter Property="Foreground"        Value="#D9E9E9"/>
+                <Setter Property="FontSize"          Value="12"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Margin"            Value="0,3"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="CheckBox">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border x:Name="Box"
+                                        Width="13" Height="13"
+                                        BorderBrush="#BD8B33" BorderThickness="1.5"
+                                        CornerRadius="2" Background="Transparent"
+                                        Margin="0,0,7,0" VerticalAlignment="Center">
+                                    <Path x:Name="Mark"
+                                          Data="M2,6.5 L5.5,10 L11,3.5"
+                                          Stroke="#BD8B33" StrokeThickness="1.5"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                          Stretch="Uniform" Margin="1"
+                                          Visibility="Collapsed"/>
+                                </Border>
+                                <ContentPresenter VerticalAlignment="Center"
+                                                  TextBlock.Foreground="{TemplateBinding Foreground}"
+                                                  TextBlock.FontSize="{TemplateBinding FontSize}"/>
+                            </StackPanel>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Mark" Property="Visibility" Value="Visible"/>
+                                    <Setter TargetName="Box"  Property="Background" Value="#1A2D1A"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.35"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- ── Settings sidebar ListBoxItem ── -->
+            <Style x:Key="NavItemStyle" TargetType="ListBoxItem">
+                <Setter Property="Foreground"    Value="#9FA6A6"/>
+                <Setter Property="Background"    Value="Transparent"/>
+                <Setter Property="FontSize"      Value="14"/>
+                <Setter Property="FontWeight"    Value="Medium"/>
+                <Setter Property="Height"        Value="52"/>
+                <Setter Property="Padding"       Value="20,0,16,0"/>
+                <Setter Property="Cursor"        Value="Hand"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ListBoxItem">
+                            <Border x:Name="BgBorder"
+                                    Background="{TemplateBinding Background}"
+                                    Padding="{TemplateBinding Padding}">
+                                <Grid VerticalAlignment="Center">
+                                    <Rectangle x:Name="Accent"
+                                               Width="3" HorizontalAlignment="Left"
+                                               VerticalAlignment="Stretch"
+                                               Margin="-20,6,0,6"
+                                               RadiusX="1.5" RadiusY="1.5"
+                                               Fill="#78B4B7" Opacity="0"/>
+                                    <ContentPresenter VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                </Grid>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter TargetName="BgBorder" Property="Background" Value="#1A3030"/>
+                                    <Setter Property="Foreground" Value="#D9E9E9"/>
+                                    <Setter TargetName="Accent"   Property="Opacity"    Value="1"/>
+                                </Trigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsMouseOver" Value="True"/>
+                                        <Condition Property="IsSelected"  Value="False"/>
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="BgBorder" Property="Background" Value="#162828"/>
+                                    <Setter Property="Foreground" Value="#CFD2D2"/>
+                                </MultiTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
 
             <Style TargetType="DataGridCell" BasedOn="{StaticResource DataGridCellStyle}">
                 <Setter Property="hc:BorderElement.CornerRadius" Value="0"/>
