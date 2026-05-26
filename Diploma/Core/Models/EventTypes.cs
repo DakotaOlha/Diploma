@@ -15,4 +15,5 @@ public static class EventTypes
     public const string IdeClosed       = "IDE_CLOSED";
     public const string FileSwitched    = "FILE_SWITCHED";
     public const string FileSavedAuto   = "FILE_SAVED_AUTO";
+    public const string RuleViolation   = "RULE_VIOLATION";
 }
