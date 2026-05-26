@@ -1,6 +1,10 @@
-﻿using System.Windows;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using Diploma.Core.Interfaces;
 using Diploma.Core.Services;
 using Diploma.ViewModels;
@@ -13,25 +17,21 @@ public partial class OverlayWindow : Window
     private readonly IAudioCaptureService  _audioService;
     private readonly DiskSpaceService      _diskSpaceService;
 
-    private string    _videoOutputPath = string.Empty;
-    private DateTime? _videoStartTime;
-    private DateTime? _audioStartTime;
-    
-    private System.Timers.Timer? _updateTimer;
     private System.Timers.Timer? _diskTimer;
-    
-    private volatile bool _isClosing;
+    private volatile bool        _isClosing;
+    private bool                 _isExpanded = true;
 
-    private static readonly SolidColorBrush GreenBrush  = Frozen(0x4C, 0xAF, 0x50);
-    private static readonly SolidColorBrush GrayBrush   = Frozen(0x88, 0x88, 0x88);
-    private static readonly SolidColorBrush RedBrush    = Frozen(0xFF, 0x55, 0x55);
+    private readonly DispatcherTimer _collapseTimer;
+
+    private static readonly SolidColorBrush RedBrush    = Frozen(0xFF, 0x44, 0x44);
     private static readonly SolidColorBrush OrangeBrush = Frozen(0xFF, 0xA0, 0x00);
+    private static readonly SolidColorBrush GrayBrush   = Frozen(0x9F, 0xA6, 0xA6);
 
     public OverlayWindow(
-        MainViewModel          viewModel,
-        IScreenCaptureService  captureService,
-        IAudioCaptureService   audioService,
-        DiskSpaceService       diskSpaceService)
+        MainViewModel         viewModel,
+        IScreenCaptureService captureService,
+        IAudioCaptureService  audioService,
+        DiskSpaceService      diskSpaceService)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -40,213 +40,269 @@ public partial class OverlayWindow : Window
         _audioService     = audioService;
         _diskSpaceService = diskSpaceService;
 
+        _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        _collapseTimer.Tick += (_, _) => BeginCollapse();
+
         _captureService.RecordingStarted += OnRecordingStarted;
+
+        if (viewModel is System.ComponentModel.INotifyPropertyChanged npc)
+            npc.PropertyChanged += OnViewModelPropertyChanged;
 
         Loaded += OnLoaded;
         Closed += OnClosed;
+    }
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        CenterAtTop();
+
+        _diskTimer = new System.Timers.Timer(10_000) { AutoReset = true };
+        _diskTimer.Elapsed += (_, _) =>
+        {
+            if (_isClosing || Dispatcher.HasShutdownStarted) return;
+            try { Dispatcher.Invoke(UpdateDiskInfo); }
+            catch (Exception) { }
+        };
+        _diskTimer.Start();
 
         UpdateDiskInfo();
     }
-    
-    private void OnLoaded(object sender, RoutedEventArgs e)
-    {
- 
-        _updateTimer = new System.Timers.Timer(200) { AutoReset = true };
-        _updateTimer.Elapsed += OnUpdateTimerElapsed;
-        _updateTimer.Start();
- 
-        _diskTimer = new System.Timers.Timer(10_000) { AutoReset = true };
-        _diskTimer.Elapsed += OnDiskTimerElapsed;
-        _diskTimer.Start();
-    }
-    
+
     private void OnClosed(object sender, EventArgs e)
     {
         _isClosing = true;
- 
-        _updateTimer?.Stop();
+        _collapseTimer.Stop();
         _diskTimer?.Stop();
- 
-        _updateTimer?.Dispose();
         _diskTimer?.Dispose();
- 
-        _updateTimer = null;
-        _diskTimer   = null;
- 
+        _diskTimer = null;
         _captureService.RecordingStarted -= OnRecordingStarted;
+        if (DataContext is System.ComponentModel.INotifyPropertyChanged npc)
+            npc.PropertyChanged -= OnViewModelPropertyChanged;
     }
-    
-    private void OnUpdateTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
+
+    // Re-expand if the recording start was cancelled (picker dismissed or error).
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (_isClosing || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+        if (e.PropertyName is not (nameof(MainViewModel.IsBusy) or nameof(MainViewModel.IsRecording)))
             return;
- 
-        try
+        if (DataContext is not MainViewModel vm) return;
+        if (!vm.IsBusy && !vm.IsRecording && !_isExpanded)
         {
-            Dispatcher.Invoke(UpdateTimers);
+            try { Dispatcher.Invoke(BeginExpand); }
+            catch (Exception) { }
         }
-        catch (TaskCanceledException) { /* Dispatcher shut down mid-flight */ }
-        catch (InvalidOperationException) { /* Dispatcher already shut down */ }
     }
-    
-    private void OnDiskTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
-    {
-        if (_isClosing || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
-            return;
- 
-        try
-        {
-            Dispatcher.Invoke(UpdateDiskInfo);
-        }
-        catch (TaskCanceledException) { }
-        catch (InvalidOperationException) { }
-    }
-    
+
     private void OnRecordingStarted(object? sender, EventArgs e)
     {
-        _videoStartTime = DateTime.Now;
-        _audioStartTime = DateTime.Now;
- 
-        if (_isClosing || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
-            return;
- 
+        if (_isClosing || Dispatcher.HasShutdownStarted) return;
         try
         {
             Dispatcher.Invoke(() =>
             {
-                VideoStatusDot.Foreground = GreenBrush;
-                AudioStatusDot.Foreground = GreenBrush;
+                if (!_isExpanded) BeginExpand();
+                else ResetCollapseTimer();
             });
         }
-        catch (TaskCanceledException) { }
-        catch (InvalidOperationException) { }
+        catch (Exception) { }
     }
 
-    public void SetOutputPath(string path) => _videoOutputPath = path;
+    // ── Expand / Collapse ────────────────────────────────────────────────────
+
+    public new void Show()
+    {
+        base.Show();
+        BeginExpand();
+    }
+
+    private void BeginExpand()
+    {
+        _isExpanded = true;
+        _collapseTimer.Stop();
+
+        CollapsedStrip.Visibility = Visibility.Collapsed;
+        ExpandedBar.Visibility    = Visibility.Visible;
+
+        var anim = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        ExpandedBar.BeginAnimation(OpacityProperty, anim);
+
+        ResetCollapseTimer();
+    }
+
+    private void BeginCollapse()
+    {
+        _collapseTimer.Stop();
+        _isExpanded = false;
+
+        var anim = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(200))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+        };
+        anim.Completed += (_, _) =>
+        {
+            ExpandedBar.Visibility = Visibility.Collapsed;
+            ExpandedBar.BeginAnimation(OpacityProperty, null);
+            ExpandedBar.Opacity = 1;
+
+            CollapsedStrip.Visibility = Visibility.Visible;
+        };
+        ExpandedBar.BeginAnimation(OpacityProperty, anim);
+    }
+
+    private void ResetCollapseTimer()
+    {
+        _collapseTimer.Stop();
+        _collapseTimer.Start();
+    }
+
+    // ── Mouse handlers ───────────────────────────────────────────────────────
+
+    private void Bar_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_isExpanded) ResetCollapseTimer();
+    }
+
+    private void Strip_MouseEnter(object sender, MouseEventArgs e) => BeginExpand();
+
+    private void Strip_Click(object sender, MouseButtonEventArgs e) => BeginExpand();
+
+    // ── Button handlers ──────────────────────────────────────────────────────
+
+    private void RecordBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+
+        if (vm.IsRecording)
+        {
+            _ = vm.StopRecordingCommand.ExecuteAsync(null);
+        }
+        else
+        {
+            // Collapse to 4-px strip — window stays alive (keeps app foreground
+            // status) so the system GraphicsCapturePicker can appear.
+            // CaptureTargetSelected will call Show() → BeginExpand() once the
+            // window is chosen.
+            BeginCollapse();
+            _ = vm.StartRecordingCommand.ExecuteAsync(null);
+        }
+    }
+
+    private void MicBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+
+        var menu = new ContextMenu { StaysOpen = false };
+
+        var noMic = new MenuItem { Header = "Без мікрофону" };
+        if (!vm.IsMicEnabled) noMic.IsChecked = true;
+        noMic.Click += (_, _) => vm.IsMicEnabled = false;
+        menu.Items.Add(noMic);
+
+        if (vm.MicDevices.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+            foreach (var device in vm.MicDevices)
+            {
+                var item = new MenuItem { Header = device };
+                if (vm.IsMicEnabled && vm.SelectedMicDevice == device)
+                    item.IsChecked = true;
+                var captured = device;
+                item.Click += (_, _) =>
+                {
+                    vm.SelectedMicDevice = captured;
+                    vm.IsMicEnabled      = true;
+                };
+                menu.Items.Add(item);
+            }
+        }
+
+        menu.PlacementTarget = (UIElement)sender;
+        menu.Placement       = PlacementMode.Bottom;
+        menu.IsOpen          = true;
+    }
+
+    private void SessionsBtn_Click(object sender, RoutedEventArgs e) =>
+        NavigateMainWindow(1);
+
+    private void SettingsBtn_Click(object sender, RoutedEventArgs e) =>
+        NavigateMainWindow(3);
+
+    private static void NavigateMainWindow(int tabIndex)
+    {
+        if (App.Current.MainWindow is MainWindow mw)
+        {
+            mw.Show();
+            if (mw.WindowState == WindowState.Minimized)
+                mw.WindowState = WindowState.Normal;
+            mw.Activate();
+            mw.NavigateTo(tabIndex);
+        }
+    }
+
+    // ── Public API (called from MainViewModel) ───────────────────────────────
 
     public void UpdateDropStats(long totalDropped, int currentFps)
     {
-        if (totalDropped == 0)
+        if (_isClosing || Dispatcher.HasShutdownStarted) return;
+        try
         {
-            DropStatsText.Text       = string.Empty;
-            DropStatsText.Visibility = Visibility.Collapsed;
-            return;
-        }
+            Dispatcher.Invoke(() =>
+            {
+                if (totalDropped == 0)
+                {
+                    DropDot.Visibility = Visibility.Collapsed;
+                    return;
+                }
 
-        var fpsNote = currentFps < 30 ? $"  {currentFps} fps ↓" : string.Empty;
-        DropStatsText.Text       = $"⚠️ {totalDropped} dropped{fpsNote}";
-        DropStatsText.Foreground = currentFps < 30 ? OrangeBrush : RedBrush;
-        DropStatsText.Visibility = Visibility.Visible;
+                DropDot.Fill       = currentFps < 20 ? OrangeBrush : RedBrush;
+                DropDot.Visibility = Visibility.Visible;
+            });
+        }
+        catch (Exception) { }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private void CenterAtTop()
+    {
+        var screen = System.Windows.Forms.Screen.PrimaryScreen
+                     ?? System.Windows.Forms.Screen.AllScreens[0];
+        Left = (screen.Bounds.Width - Width) / 2;
+        Top  = 0;
     }
 
     private void UpdateDiskInfo()
     {
-        var checkPath = string.IsNullOrEmpty(_videoOutputPath)
-            ? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos)
-            : _videoOutputPath;
-
+        var checkPath = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
         try
         {
             var result = _diskSpaceService.Check(checkPath);
+            var free   = _diskSpaceService.FormatFreeSpace(result.FreeBytes);
+            var hours  = result.EstimatedHours >= 100 ? "∞" : $"{result.EstimatedHours:F0}h";
+            DiskLabel.Text = $"{free}  ·  {hours}";
 
-            DiskFreeText.Text     = $"💾 {_diskSpaceService.FormatFreeSpace(result.FreeBytes)}";
-            DiskEstimateText.Text = result.EstimatedHours >= 100
-                ? "~∞"
-                : $"~{result.EstimatedHours:F1}h";
-
-            var color = result.EstimatedHours switch
+            DiskLabel.Foreground = result.EstimatedHours switch
             {
                 < 0.5 => RedBrush,
                 < 1.0 => OrangeBrush,
                 _     => GrayBrush
             };
-
-            DiskFreeText.Foreground     = color;
-            DiskEstimateText.Foreground = color;
         }
         catch
         {
-            DiskFreeText.Text    = "💾 —";
-            DiskEstimateText.Text = "";
+            DiskLabel.Text = "—";
         }
-    }
-
-    private void UpdateTimers()
-    {
-        var now = DateTime.Now;
-        
-        if (_videoStartTime.HasValue && _captureService.IsRecording)
-        {
-            var elapsed = now - _videoStartTime.Value;
-            VideoTimerText.Text       = elapsed.ToString(@"hh\:mm\:ss\.f");
-            VideoTimerText.Foreground = GreenBrush;
-            VideoStatusDot.Foreground = GreenBrush;
-        }
-        else
-        {
-            VideoTimerText.Text       = "00:00:00.0";
-            VideoTimerText.Foreground = GrayBrush;
-            VideoStatusDot.Foreground = GrayBrush;
-        }
- 
-        if (_audioStartTime.HasValue && _audioService.IsRecording)
-        {
-            var elapsed = now - _audioStartTime.Value;
-            AudioTimerText.Text       = elapsed.ToString(@"hh\:mm\:ss\.f");
-            AudioTimerText.Foreground = GreenBrush;
-            AudioStatusDot.Foreground = GreenBrush;
-        }
-        else
-        {
-            AudioTimerText.Text       = "00:00:00.0";
-            AudioTimerText.Foreground = GrayBrush;
-            AudioStatusDot.Foreground = GrayBrush;
-        }
- 
-        if (_videoStartTime.HasValue && _audioStartTime.HasValue
-            && _captureService.IsRecording && _audioService.IsRecording)
-        {
-            var videoDelta = (now - _videoStartTime.Value).TotalSeconds;
-            var audioDelta = (now - _audioStartTime.Value).TotalSeconds;
-            var delta      = videoDelta - audioDelta;
- 
-            DeltaText.Text = $"Δ {delta:+0.0;-0.0;0.0}s " +
-                             (delta > 0 ? "(audio lags)" :
-                              delta < 0 ? "(video lags)" : "(in sync)");
- 
-            DeltaText.Foreground = Math.Abs(delta) > 1.0 ? RedBrush : GrayBrush;
-        }
-        else
-        {
-            DeltaText.Text       = "Δ —";
-            DeltaText.Foreground = GrayBrush;
-        }
- 
-        if (!_captureService.IsRecording && _videoStartTime.HasValue)
-        {
-            _videoStartTime = null;
-            _audioStartTime = null;
-        }
-    }
-
-    private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ButtonState == MouseButtonState.Pressed) 
-            DragMove();
-    }
-
-    private void CloseButton_Click(object sender, RoutedEventArgs e) => Hide();
-
-    private void MarkerButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainViewModel vm)
-            _ = vm.AddMarkerCommand.ExecuteAsync(null);
     }
 
     private static SolidColorBrush Frozen(byte r, byte g, byte b)
     {
-        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
-        brush.Freeze();
-        return brush;
+        var b2 = new SolidColorBrush(Color.FromRgb(r, g, b));
+        b2.Freeze();
+        return b2;
     }
 }

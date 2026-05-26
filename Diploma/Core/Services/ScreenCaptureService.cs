@@ -223,7 +223,17 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
             var item = await Application.Current.Dispatcher.InvokeAsync(async () =>
             {
-                var hwnd = new WindowInteropHelper(Application.Current.MainWindow).Handle;
+                // Prefer any already-visible window (e.g. the overlay strip) so
+                // the app keeps foreground status and the picker can appear.
+                var hwnd = Application.Current.Windows
+                    .OfType<Window>()
+                    .Where(w => w.IsVisible)
+                    .Select(w => new WindowInteropHelper(w).Handle)
+                    .FirstOrDefault(h => h != IntPtr.Zero);
+
+                if (hwnd == IntPtr.Zero)
+                    hwnd = new WindowInteropHelper(Application.Current.MainWindow).EnsureHandle();
+
                 return await CapturePickerHelper.PickAsync(hwnd);
             }).Task.Unwrap().ConfigureAwait(false);
 
