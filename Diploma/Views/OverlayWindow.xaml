@@ -101,8 +101,7 @@
                 VerticalAlignment="Top"
                 Background="#D0102020"
                 CornerRadius="0,0,14,14"
-                MouseMove="Bar_MouseMove"
-                MouseLeftButtonDown="Bar_DragMove">
+                MouseMove="Bar_MouseMove">
 
             <Grid Margin="10,0,10,0" VerticalAlignment="Center">
                 <Grid.ColumnDefinitions>
@@ -161,10 +160,18 @@
                     </Button>
 
                     <Button x:Name="MicBtn"
-                            Style="{StaticResource MicBtnStyle}"
                             Click="MicBtn_Click"
                             Margin="0,0,10,0"
                             ToolTip="Мікрофон">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource MicBtnStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsRecording}" Value="True">
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
                         <TextBlock FontFamily="Segoe MDL2 Assets"
                                    FontSize="14" Text="&#xE720;">
                             <TextBlock.Style>
