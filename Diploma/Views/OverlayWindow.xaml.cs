@@ -317,9 +317,7 @@ public partial class OverlayWindow : Window
 
     private void CenterAtTop()
     {
-        var screen = System.Windows.Forms.Screen.PrimaryScreen
-                     ?? System.Windows.Forms.Screen.AllScreens[0];
-        Left = (screen.Bounds.Width - Width) / 2;
+        Left = (SystemParameters.PrimaryScreenWidth - ActualWidth) / 2;
         Top  = 0;
     }
 

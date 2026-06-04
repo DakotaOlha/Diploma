@@ -7,14 +7,9 @@ namespace Diploma.Core.Services;
 
 public sealed class BlacklistMonitor : IDisposable
 {
-    // ── Blacklist ─────────────────────────────────────────────────────────────
-    // Terms are matched case-insensitively against the foreground window title.
-    // Browser tab names appear in the window title, so "ChatGPT - Chrome" is caught.
     private static readonly string[] Terms =
     [
-        // Messengers
         "telegram", "discord", "slack", "whatsapp", "viber", "skype",
-        // AI services
         "chatgpt", "chat.openai", "claude.ai",
         "gemini", "bard",
         "copilot", "github copilot",
@@ -22,9 +17,6 @@ public sealed class BlacklistMonitor : IDisposable
         "perplexity", "grok",
     ];
 
-    // ── Cooldown ──────────────────────────────────────────────────────────────
-    // Log at most once per window title per cooldown window.
-    // Switching to a *different* blacklisted title always logs immediately.
     private static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(30);
 
     private readonly ILogService _logService;
@@ -75,7 +67,6 @@ public sealed class BlacklistMonitor : IDisposable
 
             var now = DateTime.UtcNow;
 
-            // Same title within cooldown → skip
             if (title == _lastTitle && now - _lastLogAt < Cooldown) return;
 
             _lastTitle = title;
@@ -98,8 +89,6 @@ public sealed class BlacklistMonitor : IDisposable
         _disposed = true;
         Stop();
     }
-
-    // ── Win32 ─────────────────────────────────────────────────────────────────
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
