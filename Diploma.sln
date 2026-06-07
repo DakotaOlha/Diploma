@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Diploma", "Diploma\Diploma.csproj", "{C6B5BD70-2861-44A1-92D8-C2C94BD89A56}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AlgoReplay.Tests", "AlgoReplay.Tests\AlgoReplay.Tests.csproj", "{5C74D23F-C05B-4613-BCBB-EBAA81472956}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{C6B5BD70-2861-44A1-92D8-C2C94BD89A56}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C6B5BD70-2861-44A1-92D8-C2C94BD89A56}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C6B5BD70-2861-44A1-92D8-C2C94BD89A56}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5C74D23F-C05B-4613-BCBB-EBAA81472956}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5C74D23F-C05B-4613-BCBB-EBAA81472956}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5C74D23F-C05B-4613-BCBB-EBAA81472956}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5C74D23F-C05B-4613-BCBB-EBAA81472956}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
