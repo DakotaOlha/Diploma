@@ -131,7 +131,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
     private const int  FirstFrameTimeoutMs = 5_000;
     private const long SnapshotIntervalMs  = 200;
     private const int  LogRingCapacity     = 60;
-    
+
     private int _state = (int)CaptureState.Idle;
     private CaptureState State => (CaptureState)Volatile.Read(ref _state);
 
@@ -158,7 +158,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
     }
 
     private readonly Stopwatch _recordingClock = new();
-    
+
     public TimeSpan RecordingElapsed => _recordingClock.Elapsed;
 
     private readonly object _snapshotLock = new();
@@ -175,7 +175,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
     private long _droppedFramesTotal;
 
-    // Diagnostic counters — reset at each recording start, flushed to _diag.txt
     private long _diagFramesArrived;
     private long _diagFreezeFrames;
     private long _diagCatchUpIter;
@@ -223,8 +222,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
             var item = await Application.Current.Dispatcher.InvokeAsync(async () =>
             {
-                // Prefer any already-visible window (e.g. the overlay strip) so
-                // the app keeps foreground status and the picker can appear.
                 var hwnd = Application.Current.Windows
                     .OfType<Window>()
                     .Where(w => w.IsVisible)
@@ -509,7 +506,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                 SingleReader = true,
             });
 
-        // ── Diagnostic setup ─────────────────────────────────────────────────
         var diagPath     = Path.ChangeExtension(outputPath, null) + "_diag.txt";
         var diagSw       = Stopwatch.StartNew();
         var diagQueue    = new ConcurrentQueue<string>();
@@ -533,7 +529,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
         DiagEvent("  DEBT   = max pacer debt in this second (ms behind schedule)");
         DiagEvent(new string('-', 100));
 
-        // Per-second stats reporter
         var statsTask = Task.Run(async () =>
         {
             long pArr = 0, pDrop = 0, pSent = 0, pFreeze = 0;
@@ -567,7 +562,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
             catch (OperationCanceledException) { }
         });
 
-        // Async file writer: drains diagQueue to disk every 250ms
         var writerTask = Task.Run(async () =>
         {
             try
@@ -598,10 +592,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
             }
             catch (Exception ex) { Log($"DiagWriter: {ex.Message}"); }
         });
-        // ─────────────────────────────────────────────────────────────────────
 
-        // Frame pacer: LongRunning thread, AboveNormal priority, 1ms OS timer.
-        // Reads _frameChannel → encodeChannel at exactly fixedFps.
         var pacerTask = Task.Factory.StartNew(() =>
         {
             Thread.CurrentThread.Priority = ThreadPriority.AboveNormal;
@@ -610,7 +601,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
             long frameDurationTicks = Stopwatch.Frequency / fixedFps;
             long nextTick           = Stopwatch.GetTimestamp();
             TimestampedFrame? current   = null;
-            TimestampedFrame? freezeRef = null; // last-sent frame, re-used as freeze content
+            TimestampedFrame? freezeRef = null;
 
             try
             {
@@ -626,7 +617,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
 
                     if (wait > 0)
                     {
-                        // ON SCHEDULE: drain all frames before sleep, keep newest
                         while (reader.TryRead(out var c)) { current?.Dispose(); current = c; }
 
                         long beforeSleep = Stopwatch.GetTimestamp();
@@ -640,7 +630,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                                 Thread.Sleep(0);
                         }
 
-                        // Detect OS sleep overruns (scheduler gave us back too late)
                         if (sleepMs > 1)
                         {
                             long actualMs   = (Stopwatch.GetTimestamp() - beforeSleep) * 1000L / Stopwatch.Frequency;
@@ -652,16 +641,12 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                             }
                         }
 
-                        // Read again post-sleep — fresher content may have arrived
                         while (reader.TryRead(out var c)) { current?.Dispose(); current = c; }
 
                         Interlocked.Increment(ref _diagOnSchedIter);
                     }
                     else
                     {
-                        // CATCH-UP: read ONE frame (FIFO) — spreads accumulated frames
-                        // evenly across iterations instead of draining all in one shot
-                        // (which would leave subsequent catch-up iterations empty → lost slots)
                         if (reader.TryRead(out var c)) { current?.Dispose(); current = c; }
 
                         Interlocked.Increment(ref _diagCatchUpIter);
@@ -679,7 +664,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                         nextTick = now - Stopwatch.Frequency * 5;
                     }
 
-                    // Track max debt per second for stats
                     long currDebt = Math.Max(0L, (now - nextTick) * 1000L / Stopwatch.Frequency);
                     long prev = Interlocked.Read(ref _diagMaxDebtMs);
                     while (currDebt > prev)
@@ -693,11 +677,8 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                     {
                         if (freezeRef == null)
                         {
-                            // No frame ever received — nothing to repeat yet, skip slot
                             continue;
                         }
-                        // WinRT delivered no new frame (static screen or OS stall).
-                        // Re-send last known frame to keep video duration correct.
                         current = freezeRef;
                     }
 
@@ -714,11 +695,10 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                     if (isFreeze)
                     {
                         Interlocked.Increment(ref _diagFreezeFrames);
-                        // Keep freezeRef for next iteration — don't null it via current
                     }
                     else
                     {
-                        freezeRef = current; // Update last-sent frame for future freeze slots
+                        freezeRef = current;
                     }
                     current = null;
                 }
@@ -790,7 +770,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
         {
             try { await pacerTask.ConfigureAwait(false); } catch { }
 
-            // Write final diagnostic summary
             long totArr    = Interlocked.Read(ref _diagFramesArrived);
             long totDrop   = Interlocked.Read(ref _droppedFramesTotal);
             long totSent   = Interlocked.Read(ref _diagFramesSent);
@@ -834,9 +813,6 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
         switch (encoder)
         {
             case "libx264":
-                // ultrafast є обов'язковим для real-time запису — будь-який інший preset
-                // може бути повільнішим за реальний час і блокуватиме pacer.
-                // Якість контролюється через CRF, а не preset.
                 opts.WithConstantRateFactor(crf)
                     .WithCustomArgument("-preset ultrafast")
                     .WithCustomArgument("-tune zerolatency");
