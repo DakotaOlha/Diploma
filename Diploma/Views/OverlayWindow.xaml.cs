@@ -273,6 +273,22 @@ public partial class OverlayWindow : Window
         menu.IsOpen          = true;
     }
 
+    private WhiteboardWindow? _whiteboard;
+
+    private void WhiteboardBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_whiteboard is { IsLoaded: true })
+        {
+            if (_whiteboard.WindowState == WindowState.Minimized)
+                _whiteboard.WindowState = WindowState.Normal;
+            _whiteboard.Activate();
+            return;
+        }
+        _whiteboard = new WhiteboardWindow();
+        _whiteboard.Closed += (_, _) => _whiteboard = null;
+        _whiteboard.Show();
+    }
+
     private void SessionsBtn_Click(object sender, RoutedEventArgs e) =>
         NavigateMainWindow(0); // Sessions is now the first (index 0) tab
 
