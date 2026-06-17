@@ -9,7 +9,7 @@ namespace Diploma.Views;
 
 public partial class WhiteboardWindow : Window
 {
-    private enum Tool { Select, Arrow, Rect, Pen, Text, Highlight, Eraser }
+    private enum Tool { Pen, Text, Rect, Eraser }
 
     private readonly record struct UndoEntry
     {
@@ -22,7 +22,7 @@ public partial class WhiteboardWindow : Window
 
     private readonly Stack<UndoEntry> _undoStack = new();
 
-    private Tool   _activeTool  = Tool.Select;
+    private Tool   _activeTool  = Tool.Pen;
     private Color  _activeColor = Colors.Black;
     private double _thickness   = 2.0;
 
@@ -32,16 +32,8 @@ public partial class WhiteboardWindow : Window
 
     private TextBox? _activeTextBox;
 
-    private UIElement? _selectedElement;
-    private Border?    _selectionBorder;
-
-    private bool   _isMoving;
-    private Point  _moveOrigin;
-    private double _moveStartLeft;
-    private double _moveStartTop;
-
-    private const double DragThreshold = 5.0;
-    private bool _moveBeyondThreshold;
+    private bool _isFullscreen;
+    private Rect _normalBounds;
 
     private static readonly Color[] Palette =
     [
@@ -91,7 +83,6 @@ public partial class WhiteboardWindow : Window
             if (entry.Element is { } element)
             {
                 if (!DrawingCanvas.Children.Contains(element)) continue;
-                if (_selectedElement == element) ClearSelection();
                 DrawingCanvas.Children.Remove(element);
                 return;
             }
@@ -102,7 +93,6 @@ public partial class WhiteboardWindow : Window
 
     private void ClearAll()
     {
-        ClearSelection();
         _activeTextBox = null;
         DrawingCanvas.Strokes.StrokesChanged -= OnStrokesChanged;
         DrawingCanvas.Strokes.Clear();
@@ -114,42 +104,33 @@ public partial class WhiteboardWindow : Window
     private void Tool_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button btn) return;
-
         var tool = btn.Tag switch
         {
-            "Select"    => Tool.Select,
-            "Arrow"     => Tool.Arrow,
-            "Rect"      => Tool.Rect,
-            "Pen"       => Tool.Pen,
-            "Text"      => Tool.Text,
-            "Highlight" => Tool.Highlight,
-            "Eraser"    => Tool.Eraser,
-            _           => Tool.Select
+            "Pen"    => Tool.Pen,
+            "Text"   => Tool.Text,
+            "Rect"   => Tool.Rect,
+            "Eraser" => Tool.Eraser,
+            _        => Tool.Pen
         };
-
         SelectTool(tool);
     }
 
     private void SelectTool(Tool tool)
     {
-        if (_activeTool == Tool.Select && tool != Tool.Select) ClearSelection();
         if (_activeTextBox is not null) CommitActiveTextBox();
 
         _activeTool = tool;
 
-        foreach (var b in new[] { BtnSelect, BtnArrow, BtnRect, BtnPen, BtnText, BtnHighlight, BtnEraser })
+        foreach (var b in new[] { BtnPen, BtnText, BtnRect, BtnEraser })
             b.Style = (Style)Resources["ToolBtn"];
 
         var activeBtn = tool switch
         {
-            Tool.Select    => BtnSelect,
-            Tool.Arrow     => BtnArrow,
-            Tool.Rect      => BtnRect,
-            Tool.Pen       => BtnPen,
-            Tool.Text      => BtnText,
-            Tool.Highlight => BtnHighlight,
-            Tool.Eraser    => BtnEraser,
-            _              => BtnSelect
+            Tool.Pen    => BtnPen,
+            Tool.Text   => BtnText,
+            Tool.Rect   => BtnRect,
+            Tool.Eraser => BtnEraser,
+            _           => BtnPen
         };
         activeBtn.Style = (Style)Resources["ToolBtnActive"];
 
@@ -160,12 +141,7 @@ public partial class WhiteboardWindow : Window
             _           => InkCanvasEditingMode.None
         };
 
-        DrawingCanvas.Cursor = tool switch
-        {
-            Tool.Select => Cursors.Arrow,
-            Tool.Text   => Cursors.IBeam,
-            _           => Cursors.Cross,
-        };
+        DrawingCanvas.Cursor = tool == Tool.Text ? Cursors.IBeam : Cursors.Cross;
     }
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
@@ -173,43 +149,30 @@ public partial class WhiteboardWindow : Window
         if (Keyboard.FocusedElement is TextBox)
         {
             if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Control)
-            {
-                CommitActiveTextBox();
-                e.Handled = true;
-            }
+            { CommitActiveTextBox(); e.Handled = true; }
             else if (e.Key == Key.Escape)
-            {
-                CancelActiveTextBox();
-                e.Handled = true;
-            }
+            { CancelActiveTextBox(); e.Handled = true; }
             return;
         }
 
         switch (e.Key)
         {
-            case Key.S when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Select);    e.Handled = true; break;
-            case Key.A when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Arrow);     e.Handled = true; break;
-            case Key.P when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Pen);       e.Handled = true; break;
-            case Key.M when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Highlight); e.Handled = true; break;
-            case Key.T when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Text);      e.Handled = true; break;
-            case Key.R when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Rect);      e.Handled = true; break;
-            case Key.E when Keyboard.Modifiers == ModifierKeys.None:    SelectTool(Tool.Eraser);    e.Handled = true; break;
-            case Key.Escape:                                             ClearSelection();            e.Handled = true; break;
-            case Key.Delete when Keyboard.Modifiers == ModifierKeys.None:    DeleteSelected();       e.Handled = true; break;
-            case Key.Delete when Keyboard.Modifiers == ModifierKeys.Control: ClearAll();             e.Handled = true; break;
-            case Key.Z when Keyboard.Modifiers == ModifierKeys.Control:      UndoLast();             e.Handled = true; break;
+            case Key.P when Keyboard.Modifiers == ModifierKeys.None:         SelectTool(Tool.Pen);    e.Handled = true; break;
+            case Key.T when Keyboard.Modifiers == ModifierKeys.None:         SelectTool(Tool.Text);   e.Handled = true; break;
+            case Key.R when Keyboard.Modifiers == ModifierKeys.None:         SelectTool(Tool.Rect);   e.Handled = true; break;
+            case Key.E when Keyboard.Modifiers == ModifierKeys.None:         SelectTool(Tool.Eraser); e.Handled = true; break;
+            case Key.Z when Keyboard.Modifiers == ModifierKeys.Control:      UndoLast();              e.Handled = true; break;
+            case Key.Delete when Keyboard.Modifiers == ModifierKeys.Control: ClearAll();              e.Handled = true; break;
+            case Key.F11:                                                     ToggleFullscreen();      e.Handled = true; break;
         }
     }
 
     private void DrawingCanvas_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         if (Keyboard.Modifiers != ModifierKeys.Control) return;
-
-        var delta        = e.Delta > 0 ? 1.0 : -1.0;
-        var newThickness = Math.Clamp(_thickness + delta, 1.0, 20.0);
+        var newThickness = Math.Clamp(_thickness + (e.Delta > 0 ? 1.0 : -1.0), 1.0, 20.0);
         if (Math.Abs(newThickness - _thickness) < 0.01) { e.Handled = true; return; }
-
-        _thickness            = newThickness;
+        _thickness = newThickness;
         ThicknessSlider.Value = _thickness;
         ApplyThickness();
         e.Handled = true;
@@ -241,41 +204,30 @@ public partial class WhiteboardWindow : Window
     {
         if (_activeTool is Tool.Pen or Tool.Eraser) return;
         var pos = e.GetPosition(DrawingCanvas);
-        switch (_activeTool)
-        {
-            case Tool.Select: Select_MouseDown(e, pos, null); return;
-            case Tool.Text:   Text_MouseDown(pos);            return;
-            default:          Drawing_MouseDown(pos);         return;
-        }
+        if (_activeTool == Tool.Text) Text_MouseDown(pos);
+        else                          Drawing_MouseDown(pos);
     }
 
     private void DrawingCanvas_MouseMove(object sender, MouseEventArgs e)
     {
-        if (_activeTool == Tool.Select)
-        {
-            Select_MouseMove(e.GetPosition(DrawingCanvas));
-            return;
-        }
-        if (_isDragging && _previewShape is not null)
-            UpdateShape(_previewShape, _activeTool, _dragStart, e.GetPosition(DrawingCanvas));
+        if (!_isDragging || _previewShape is null) return;
+        UpdateShape(_previewShape, _dragStart, e.GetPosition(DrawingCanvas));
     }
 
-    private void DrawingCanvas_MouseUp(object sender, MouseButtonEventArgs e)
-    {
-        if (_activeTool == Tool.Select) Select_MouseUp(e);
-        else                            Drawing_MouseUp();
-    }
+    private void DrawingCanvas_MouseUp(object sender, MouseButtonEventArgs e) => Drawing_MouseUp();
 
     private void Drawing_MouseDown(Point pos)
     {
         _dragStart    = pos;
         _isDragging   = true;
-        _previewShape = CreateShape(_activeTool, pos, pos);
-        if (_previewShape is not null)
+        _previewShape = new Rectangle
         {
-            DrawingCanvas.Children.Add(_previewShape);
-            DrawingCanvas.CaptureMouse();
-        }
+            Stroke          = new SolidColorBrush(_activeColor),
+            StrokeThickness = _thickness,
+            Fill            = Brushes.Transparent,
+        };
+        DrawingCanvas.Children.Add(_previewShape);
+        DrawingCanvas.CaptureMouse();
     }
 
     private void Drawing_MouseUp()
@@ -283,158 +235,26 @@ public partial class WhiteboardWindow : Window
         if (!_isDragging) return;
         _isDragging = false;
         DrawingCanvas.ReleaseMouseCapture();
-        if (_previewShape is not null && IsShapeVisible(_previewShape))
+        if (_previewShape is not null && (_previewShape.Width > 2 || _previewShape.Height > 2))
             _undoStack.Push(UndoEntry.ForElement(_previewShape));
         _previewShape = null;
     }
 
+    private static void UpdateShape(Shape shape, Point from, Point to)
+    {
+        InkCanvas.SetLeft(shape, Math.Min(from.X, to.X));
+        InkCanvas.SetTop (shape, Math.Min(from.Y, to.Y));
+        shape.Width  = Math.Abs(to.X - from.X);
+        shape.Height = Math.Abs(to.Y - from.Y);
+    }
+
     private void Text_MouseDown(Point pos)
     {
-        var hit = FindHitElement(pos);
-        if (hit is TextBox existingTb) { ActivateTextBox(existingTb); return; }
         var tb = BuildTextBox();
         InkCanvas.SetLeft(tb, pos.X);
         InkCanvas.SetTop (tb, pos.Y);
         DrawingCanvas.Children.Add(tb);
         ActivateTextBox(tb);
-    }
-
-    private void Select_MouseDown(MouseButtonEventArgs e, Point pos, UIElement? sourceElement)
-    {
-        if (_activeTextBox is not null && sourceElement != _activeTextBox)
-            CommitActiveTextBox();
-
-        var target = sourceElement ?? FindHitElement(pos);
-        if (target is null) { ClearSelection(); return; }
-
-        _isMoving            = true;
-        _moveBeyondThreshold = false;
-        _moveOrigin          = pos;
-        _moveStartLeft       = InkCanvas.GetLeft(target);
-        _moveStartTop        = InkCanvas.GetTop(target);
-        if (double.IsNaN(_moveStartLeft)) _moveStartLeft = 0;
-        if (double.IsNaN(_moveStartTop))  _moveStartTop  = 0;
-
-        SetSelection(target);
-        DrawingCanvas.Cursor = Cursors.SizeAll;
-        DrawingCanvas.CaptureMouse();
-        e.Handled = true;
-    }
-
-    private void Select_MouseMove(Point pos)
-    {
-        if (!_isMoving || _selectedElement is null) return;
-        var delta = pos - _moveOrigin;
-        if (!_moveBeyondThreshold)
-        {
-            if (delta.Length < DragThreshold) return;
-            _moveBeyondThreshold = true;
-        }
-        InkCanvas.SetLeft(_selectedElement, _moveStartLeft + delta.X);
-        InkCanvas.SetTop (_selectedElement, _moveStartTop  + delta.Y);
-        UpdateSelectionBorderPosition();
-    }
-
-    private void Select_MouseUp(MouseButtonEventArgs e)
-    {
-        if (!_isMoving) return;
-        _isMoving = false;
-        DrawingCanvas.ReleaseMouseCapture();
-        DrawingCanvas.Cursor = Cursors.Arrow;
-        if (!_moveBeyondThreshold && _selectedElement is not null)
-            if (e.ClickCount == 2 && _selectedElement is TextBox tb)
-            { ClearSelection(); ActivateTextBox(tb); }
-        _moveBeyondThreshold = false;
-    }
-
-    private void AttachSelectHandlers(TextBox tb)
-    {
-        tb.PreviewMouseDown += (s, e) => { if (_activeTool == Tool.Select) Select_MouseDown(e, e.GetPosition(DrawingCanvas), (TextBox)s); };
-        tb.PreviewMouseMove += (s, e) => { if (_activeTool == Tool.Select && _isMoving) { Select_MouseMove(e.GetPosition(DrawingCanvas)); e.Handled = true; } };
-        tb.PreviewMouseUp   += (s, e) => { if (_activeTool == Tool.Select && _isMoving) { Select_MouseUp(e); e.Handled = true; } };
-    }
-
-    private UIElement? FindHitElement(Point pos)
-    {
-        UIElement? found = null;
-        VisualTreeHelper.HitTest(
-            DrawingCanvas, null,
-            result =>
-            {
-                var candidate = FindDirectChild(DrawingCanvas, result.VisualHit);
-                if (candidate is not null && candidate != _selectionBorder)
-                {
-                    found = candidate;
-                    return HitTestResultBehavior.Stop;
-                }
-                return HitTestResultBehavior.Continue;
-            },
-            new PointHitTestParameters(pos));
-        return found;
-    }
-
-    private static UIElement? FindDirectChild(InkCanvas parent, DependencyObject? child)
-    {
-        var current = child;
-        while (current is not null)
-        {
-            if (current is UIElement el && parent.Children.Contains(el)) return el;
-            current = VisualTreeHelper.GetParent(current);
-        }
-        return null;
-    }
-
-    private void SetSelection(UIElement element)
-    {
-        ClearSelection();
-        _selectedElement = element;
-        var left   = InkCanvas.GetLeft(element);
-        var top    = InkCanvas.GetTop(element);
-        var fe     = element as FrameworkElement;
-        var width  = fe?.ActualWidth  ?? 0;
-        var height = fe?.ActualHeight ?? 0;
-        if (double.IsNaN(left)) left = 0;
-        if (double.IsNaN(top))  top  = 0;
-        _selectionBorder = new Border
-        {
-            Width = width + 4, Height = height + 4,
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0x0A, 0x84, 0xFF)),
-            BorderThickness = new Thickness(1.5),
-            Background      = Brushes.Transparent,
-            IsHitTestVisible = false,
-        };
-        InkCanvas.SetLeft(_selectionBorder, left - 2);
-        InkCanvas.SetTop (_selectionBorder, top  - 2);
-        DrawingCanvas.Children.Add(_selectionBorder);
-    }
-
-    private void UpdateSelectionBorderPosition()
-    {
-        if (_selectionBorder is null || _selectedElement is null) return;
-        var left = InkCanvas.GetLeft(_selectedElement);
-        var top  = InkCanvas.GetTop (_selectedElement);
-        if (double.IsNaN(left)) left = 0;
-        if (double.IsNaN(top))  top  = 0;
-        InkCanvas.SetLeft(_selectionBorder, left - 2);
-        InkCanvas.SetTop (_selectionBorder, top  - 2);
-    }
-
-    private void ClearSelection()
-    {
-        if (_selectionBorder is not null)
-        {
-            DrawingCanvas.Children.Remove(_selectionBorder);
-            _selectionBorder = null;
-        }
-        _selectedElement = null;
-    }
-
-    private void DeleteSelected()
-    {
-        if (_selectedElement is null) return;
-        var el = _selectedElement;
-        ClearSelection();
-        DrawingCanvas.Children.Remove(el);
     }
 
     private TextBox BuildTextBox()
@@ -445,7 +265,7 @@ public partial class WhiteboardWindow : Window
             AcceptsTab      = false,
             TextWrapping    = TextWrapping.Wrap,
             Background      = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
+            BorderThickness = new Thickness(0, 0, 0, 1),
             BorderBrush     = new SolidColorBrush(_activeColor),
             Foreground      = new SolidColorBrush(_activeColor),
             CaretBrush      = new SolidColorBrush(_activeColor),
@@ -454,22 +274,17 @@ public partial class WhiteboardWindow : Window
             MaxWidth        = DrawingCanvas.ActualWidth > 0 ? DrawingCanvas.ActualWidth * 0.8 : 500,
             VerticalScrollBarVisibility   = ScrollBarVisibility.Disabled,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            IsHitTestVisible = true,
         };
-        tb.TextChanged += (_, _) => tb.Height = double.NaN;
-        AttachSelectHandlers(tb);
+        tb.TextChanged    += (_, _) => tb.Height = double.NaN;
+        tb.PreviewKeyDown += TextBox_PreviewKeyDown;
+        tb.LostFocus      += TextBox_LostFocus;
         return tb;
     }
 
     private void ActivateTextBox(TextBox tb)
     {
         if (_activeTextBox is not null && _activeTextBox != tb) CommitActiveTextBox();
-        _activeTextBox     = tb;
-        tb.BorderThickness = new Thickness(0, 0, 0, 1);
-        tb.PreviewKeyDown -= TextBox_PreviewKeyDown;
-        tb.PreviewKeyDown += TextBox_PreviewKeyDown;
-        tb.LostFocus      -= TextBox_LostFocus;
-        tb.LostFocus      += TextBox_LostFocus;
+        _activeTextBox = tb;
         tb.Focus();
         Keyboard.Focus(tb);
         tb.CaretIndex = tb.Text.Length;
@@ -506,76 +321,34 @@ public partial class WhiteboardWindow : Window
         if (_activeTextBox is null) return;
         var tb = _activeTextBox;
         _activeTextBox = null;
-        if (string.IsNullOrWhiteSpace(tb.Text)) DrawingCanvas.Children.Remove(tb);
-        else tb.BorderThickness = new Thickness(0);
+        DrawingCanvas.Children.Remove(tb);
         Keyboard.Focus(this);
     }
 
-    private static bool IsShapeVisible(Shape shape)
-        => shape.Width > 2 || shape.Height > 2 ||
-           (shape is Polyline pl && pl.Points.Count >= 2);
+    private void FullscreenBtn_Click(object sender, RoutedEventArgs e) => ToggleFullscreen();
 
-    private Shape? CreateShape(Tool tool, Point from, Point to) => tool switch
+    private void ToggleFullscreen()
     {
-        Tool.Rect => new Rectangle
+        if (_isFullscreen)
         {
-            Stroke          = new SolidColorBrush(_activeColor),
-            StrokeThickness = _thickness,
-            Fill            = Brushes.Transparent,
-        },
-        Tool.Highlight => new Rectangle
-        {
-            Fill   = new SolidColorBrush(Color.FromArgb(80, _activeColor.R, _activeColor.G, _activeColor.B)),
-            Stroke = Brushes.Transparent,
-        },
-        Tool.Arrow => BuildArrowShape(from, to),
-        _          => null
-    };
-
-    private static void UpdateShape(Shape shape, Tool tool, Point from, Point to)
-    {
-        switch (tool)
-        {
-            case Tool.Rect:
-            case Tool.Highlight:
-                InkCanvas.SetLeft(shape, Math.Min(from.X, to.X));
-                InkCanvas.SetTop (shape, Math.Min(from.Y, to.Y));
-                shape.Width  = Math.Abs(to.X - from.X);
-                shape.Height = Math.Abs(to.Y - from.Y);
-                break;
-            case Tool.Arrow:
-                if (shape is Polyline pl) RebuildArrow(pl, from, to);
-                break;
+            Left   = _normalBounds.Left;
+            Top    = _normalBounds.Top;
+            Width  = _normalBounds.Width;
+            Height = _normalBounds.Height;
+            FullscreenIcon.Text = "";
+            _isFullscreen = false;
         }
-    }
-
-    private Polyline BuildArrowShape(Point from, Point to)
-    {
-        var pl = new Polyline
+        else
         {
-            Stroke             = new SolidColorBrush(_activeColor),
-            StrokeThickness    = _thickness,
-            StrokeEndLineCap   = PenLineCap.Round,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeLineJoin     = PenLineJoin.Round,
-        };
-        RebuildArrow(pl, from, to);
-        return pl;
-    }
-
-    private static void RebuildArrow(Polyline pl, Point from, Point to)
-    {
-        var dir = to - from;
-        var len = dir.Length;
-        if (len < 1) return;
-        dir.Normalize();
-        var headLen   = Math.Min(16.0, len * 0.35);
-        var headAngle = Math.PI / 6.0;
-        var left  = new Vector( Math.Cos(headAngle)  * (-dir.X) - Math.Sin(headAngle)  * (-dir.Y),
-                                Math.Sin(headAngle)  * (-dir.X) + Math.Cos(headAngle)  * (-dir.Y));
-        var right = new Vector( Math.Cos(-headAngle) * (-dir.X) - Math.Sin(-headAngle) * (-dir.Y),
-                                Math.Sin(-headAngle) * (-dir.X) + Math.Cos(-headAngle) * (-dir.Y));
-        pl.Points = new PointCollection { from, to, to + left * headLen, to, to + right * headLen };
+            _normalBounds = new Rect(Left, Top, Width, Height);
+            var wa = SystemParameters.WorkArea;
+            Left   = wa.Left;
+            Top    = wa.Top;
+            Width  = wa.Width;
+            Height = wa.Height;
+            FullscreenIcon.Text = "";
+            _isFullscreen = true;
+        }
     }
 
     protected override void OnClosed(EventArgs e)

@@ -48,14 +48,28 @@
                     <TextBlock Text="Дошка"
                                Foreground="#888" FontSize="12"
                                VerticalAlignment="Center"/>
-                    <Button Content="✕" Style="{StaticResource ToolBtn}"
-                            HorizontalAlignment="Right"
-                            Click="CloseButton_Click"
-                            Foreground="#666"/>
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center">
+                        <Button x:Name="BtnFullscreen"
+                                Click="FullscreenBtn_Click"
+                                Style="{StaticResource ToolBtn}"
+                                Foreground="#666"
+                                Margin="0,0,4,0"
+                                ToolTip="На весь екран">
+                            <TextBlock x:Name="FullscreenIcon"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="12" Text="&#xE922;"/>
+                        </Button>
+                        <Button Content="✕"
+                                Style="{StaticResource ToolBtn}"
+                                Click="CloseButton_Click"
+                                Foreground="#666"/>
+                    </StackPanel>
                 </Grid>
             </Border>
 
-            <!-- White canvas area -->
+            <!-- White canvas -->
             <Border Grid.Row="1" Background="#FFFFFF" ClipToBounds="True">
                 <InkCanvas x:Name="DrawingCanvas"
                            Background="Transparent"
@@ -74,45 +88,9 @@
                 <Grid Margin="12,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
 
-                        <Button x:Name="BtnSelect" Click="Tool_Click" Tag="Select"
-                                Style="{StaticResource ToolBtnActive}"
-                                ToolTip="Виділення та переміщення [S]">
-                            <Button.Content>
-                                <Path Data="M5,3 L5,16 L8,13 L11,19 L13,18 L10,12 L14,12 Z"
-                                      Fill="#FFFFFF" Stroke="#FFFFFF" StrokeThickness="0.5"
-                                      StrokeLineJoin="Round"/>
-                            </Button.Content>
-                        </Button>
-
-                        <Rectangle Width="1" Height="20" Fill="#3A3A3C" Margin="4,0"/>
-
-                        <Button x:Name="BtnArrow" Click="Tool_Click" Tag="Arrow"
-                                Style="{StaticResource ToolBtn}"
-                                ToolTip="Стрілка [A]">
-                            <Button.Content>
-                                <Canvas Width="18" Height="18">
-                                    <Line X1="2" Y1="9" X2="15" Y2="9"
-                                          Stroke="#CCCCCC" StrokeThickness="1.8"
-                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                    <Polyline Points="10,5 15,9 10,13"
-                                              Stroke="#CCCCCC" StrokeThickness="1.8"
-                                              Fill="Transparent" StrokeLineJoin="Round"
-                                              StrokeEndLineCap="Round"/>
-                                </Canvas>
-                            </Button.Content>
-                        </Button>
-
-                        <Button x:Name="BtnRect" Click="Tool_Click" Tag="Rect"
-                                Style="{StaticResource ToolBtn}" ToolTip="Прямокутник [R]">
-                            <Button.Content>
-                                <Rectangle Width="14" Height="10"
-                                           Stroke="#CCCCCC" StrokeThickness="1.5"
-                                           Fill="Transparent"/>
-                            </Button.Content>
-                        </Button>
-
                         <Button x:Name="BtnPen" Click="Tool_Click" Tag="Pen"
-                                Style="{StaticResource ToolBtn}" ToolTip="Олівець [P]">
+                                Style="{StaticResource ToolBtnActive}"
+                                ToolTip="Олівець [P]">
                             <Button.Content>
                                 <Path Data="M4,14 L10,3 L13,6 L7,17 L4,17 Z"
                                       Stroke="#CCCCCC" StrokeThickness="1.5"
@@ -121,7 +99,8 @@
                         </Button>
 
                         <Button x:Name="BtnText" Click="Tool_Click" Tag="Text"
-                                Style="{StaticResource ToolBtn}" ToolTip="Текст [T]">
+                                Style="{StaticResource ToolBtn}"
+                                ToolTip="Текст [T]">
                             <Button.Content>
                                 <TextBlock Text="T" Foreground="#CCCCCC"
                                            FontSize="15" FontWeight="Medium"
@@ -129,16 +108,19 @@
                             </Button.Content>
                         </Button>
 
-                        <Button x:Name="BtnHighlight" Click="Tool_Click" Tag="Highlight"
-                                Style="{StaticResource ToolBtn}" ToolTip="Маркер [M]">
+                        <Button x:Name="BtnRect" Click="Tool_Click" Tag="Rect"
+                                Style="{StaticResource ToolBtn}"
+                                ToolTip="Прямокутник [R]">
                             <Button.Content>
-                                <Rectangle Width="16" Height="8" RadiusX="1" RadiusY="1"
-                                           Fill="#55FFD700" Stroke="#FFD700" StrokeThickness="1"/>
+                                <Rectangle Width="14" Height="10"
+                                           Stroke="#CCCCCC" StrokeThickness="1.5"
+                                           Fill="Transparent"/>
                             </Button.Content>
                         </Button>
 
                         <Button x:Name="BtnEraser" Click="Tool_Click" Tag="Eraser"
-                                Style="{StaticResource ToolBtn}" ToolTip="Гумка [E]">
+                                Style="{StaticResource ToolBtn}"
+                                ToolTip="Гумка [E]">
                             <Button.Content>
                                 <Path Data="M3,13 L9,5 L15,9 L9,17 Z M9,17 L15,17"
                                       Stroke="#CCCCCC" StrokeThickness="1.5"

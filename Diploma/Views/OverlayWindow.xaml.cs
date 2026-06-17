@@ -19,6 +19,7 @@ public partial class OverlayWindow : Window
     private readonly DiskSpaceService      _diskSpaceService;
     private readonly IInputMonitorService  _inputMonitor;
     private readonly ISettingsService      _settingsService;
+    private readonly IGlobalHotkeyService  _hotkeyService;
 
     private System.Timers.Timer? _diskTimer;
     private DispatcherTimer?     _violationTimer;
@@ -37,7 +38,8 @@ public partial class OverlayWindow : Window
         IAudioCaptureService  audioService,
         DiskSpaceService      diskSpaceService,
         IInputMonitorService  inputMonitor,
-        ISettingsService      settingsService)
+        ISettingsService      settingsService,
+        IGlobalHotkeyService  hotkeyService)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -47,12 +49,14 @@ public partial class OverlayWindow : Window
         _diskSpaceService = diskSpaceService;
         _inputMonitor     = inputMonitor;
         _settingsService  = settingsService;
+        _hotkeyService    = hotkeyService;
 
         _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _collapseTimer.Tick += (_, _) => BeginCollapse();
 
         _captureService.RecordingStarted   += OnRecordingStarted;
         _inputMonitor.ViolationDetected    += OnViolationDetected;
+        _hotkeyService.WhiteboardRequested += OnWhiteboardRequested;
 
         if (viewModel is System.ComponentModel.INotifyPropertyChanged npc)
             npc.PropertyChanged += OnViewModelPropertyChanged;
@@ -86,8 +90,9 @@ public partial class OverlayWindow : Window
         _diskTimer?.Stop();
         _diskTimer?.Dispose();
         _diskTimer = null;
-        _captureService.RecordingStarted -= OnRecordingStarted;
-        _inputMonitor.ViolationDetected  -= OnViolationDetected;
+        _captureService.RecordingStarted   -= OnRecordingStarted;
+        _inputMonitor.ViolationDetected    -= OnViolationDetected;
+        _hotkeyService.WhiteboardRequested -= OnWhiteboardRequested;
         if (DataContext is System.ComponentModel.INotifyPropertyChanged npc)
             npc.PropertyChanged -= OnViewModelPropertyChanged;
     }
@@ -275,7 +280,17 @@ public partial class OverlayWindow : Window
 
     private WhiteboardWindow? _whiteboard;
 
-    private void WhiteboardBtn_Click(object sender, RoutedEventArgs e)
+    private void OnWhiteboardRequested(object? sender, EventArgs e)
+    {
+        if (_isClosing || Dispatcher.HasShutdownStarted) return;
+        try { Dispatcher.Invoke(OpenOrFocusWhiteboard); }
+        catch (Exception) { }
+    }
+
+    private void WhiteboardBtn_Click(object sender, RoutedEventArgs e) =>
+        OpenOrFocusWhiteboard();
+
+    private void OpenOrFocusWhiteboard()
     {
         if (_whiteboard is { IsLoaded: true })
         {
