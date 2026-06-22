@@ -216,21 +216,46 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal"
                             VerticalAlignment="Center">
 
-                    <Button Style="{StaticResource IconBtnStyle}"
-                            Command="{Binding AddMarkerCommand}"
+                    <Button Command="{Binding AddMarkerCommand}"
                             Margin="0,0,6,0"
                             ToolTip="Маркер (Ctrl+Shift+M)">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource IconBtnStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsRecording}" Value="False">
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
                         <TextBlock FontFamily="Segoe MDL2 Assets"
                                    FontSize="14" Text="&#xE70F;"
                                    Foreground="#78B4B7"/>
                     </Button>
 
-                    <Button Style="{StaticResource IconBtnStyle}"
-                            Command="{Binding TakeScreenshotCommand}"
+                    <Button Command="{Binding TakeScreenshotCommand}"
                             Margin="0,0,6,0"
                             ToolTip="Скріншот (Ctrl+Shift+S)">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource IconBtnStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsRecording}" Value="False">
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
                         <TextBlock FontFamily="Segoe MDL2 Assets"
                                    FontSize="14" Text="&#xE722;"
+                                   Foreground="#78B4B7"/>
+                    </Button>
+
+                    <Button Style="{StaticResource IconBtnStyle}"
+                            Click="WhiteboardBtn_Click"
+                            Margin="0,0,6,0"
+                            ToolTip="Дошка">
+                        <TextBlock FontFamily="Segoe MDL2 Assets"
+                                   FontSize="14" Text="&#xE7C9;"
                                    Foreground="#78B4B7"/>
                     </Button>
 

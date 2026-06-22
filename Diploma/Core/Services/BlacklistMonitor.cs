@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using Diploma.Core.Interfaces;
@@ -16,6 +17,21 @@ public sealed class BlacklistMonitor : IDisposable
         "deepseek",
         "perplexity", "grok",
     ];
+
+    private static readonly HashSet<string> IdeProcesses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "devenv",
+        "code",
+        "rider64", "rider",
+        "idea64", "idea",
+        "pycharm64", "pycharm",
+        "clion64", "clion",
+        "webstorm64", "webstorm",
+        "goland64", "goland",
+        "phpstorm64", "phpstorm",
+        "notepad++",
+        "sublime_text",
+    };
 
     private static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(30);
 
@@ -58,6 +74,14 @@ public sealed class BlacklistMonitor : IDisposable
             var hwnd = GetForegroundWindow();
             if (hwnd == IntPtr.Zero) return;
 
+            GetWindowThreadProcessId(hwnd, out var pid);
+            try
+            {
+                var procName = Process.GetProcessById((int)pid).ProcessName;
+                if (IdeProcesses.Contains(procName)) return;
+            }
+            catch { }
+
             var title = GetWindowTitle(hwnd);
             if (string.IsNullOrWhiteSpace(title)) return;
 
@@ -92,6 +116,9 @@ public sealed class BlacklistMonitor : IDisposable
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
