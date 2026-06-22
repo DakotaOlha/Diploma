@@ -135,7 +135,7 @@ public partial class PlayerView : UserControl
             var left  = Math.Clamp(ratio * width - MarkerHalf, 0.0, width - MarkerWidth);
 
             var brush = (Brush)_colorConverter.Convert(
-                entry.EventType, typeof(Brush), null,
+                entry.EventType!, typeof(Brush), parameter: null!,
                 System.Globalization.CultureInfo.InvariantCulture);
 
             var marker = new Grid

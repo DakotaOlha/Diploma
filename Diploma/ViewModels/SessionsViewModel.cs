@@ -84,7 +84,7 @@ public partial class SessionsViewModel : ObservableObject
         if (SelectedSession is null) 
             return;
         
-        string sanitizedName = SelectedSession.Name.Replace(" ", "_").Replace(":", "-");
+        string sanitizedName = SelectedSession.Name!.Replace(" ", "_").Replace(":", "-");
         
         var path = PickSavePath("JSON файл|*.json", $"{sanitizedName}.json");
         if (path is null) return;
@@ -97,7 +97,7 @@ public partial class SessionsViewModel : ObservableObject
         if (SelectedSession is null) 
             return;
         
-        string sanitizedName = SelectedSession.Name.Replace(" ", "_").Replace(":", "-");
+        string sanitizedName = SelectedSession.Name!.Replace(" ", "_").Replace(":", "-");
         
         var path = PickSavePath("Markdown файл|*.md", $"{sanitizedName}.md");
         if (path is null) return;
@@ -110,7 +110,7 @@ public partial class SessionsViewModel : ObservableObject
         if (SelectedSession is null) 
             return;
         
-        string sanitizedName = SelectedSession.Name.Replace(" ", "_").Replace(":", "-");
+        string sanitizedName = SelectedSession.Name!.Replace(" ", "_").Replace(":", "-");
         
         var path = PickSavePath("Text файл|*.txt", $"{sanitizedName}_chapters.txt");
         if (path is null) return;
@@ -151,8 +151,8 @@ public partial class SessionsViewModel : ObservableObject
         var filtered = string.IsNullOrWhiteSpace(SearchText)
             ? _allEntries
             : _allEntries.Where(e =>
-                e.EventType.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
-                e.Description.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
+                e.EventType!.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
+                e.Description!.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
 
         foreach (var e in filtered)
             Entries.Add(e);
@@ -163,13 +163,12 @@ public partial class SessionsViewModel : ObservableObject
     {
         if (session is null) return;
 
-        var dialog = new RenameDialog(session.Name);
+        var dialog = new RenameDialog(session.Name!);
         if (dialog.ShowDialog() != true) return;
 
         var savedId = session.Id;
         await _logService.UpdateSessionNameAsync(savedId, dialog.NewName);
 
-        // Оновлюємо список в пам'яті без зміни SelectedSession
         var allSessions = await _logService.GetAllSessionsAsync();
 
         var currentSelectedId = SelectedSession?.Id;
@@ -177,7 +176,6 @@ public partial class SessionsViewModel : ObservableObject
         foreach (var s in allSessions)
             Sessions.Add(s);
 
-        // Відновлюємо вибір на перейменовану сесію (або на попередньо вибрану)
         var updated = Sessions.FirstOrDefault(s => s.Id == savedId)
                    ?? Sessions.FirstOrDefault(s => s.Id == currentSelectedId);
 
@@ -301,7 +299,7 @@ public partial class SessionsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async void JumpToEntry(LogEntry? entry)
+    private async Task JumpToEntry(LogEntry? entry)
     {
         if (entry is null) return;
     

@@ -58,7 +58,6 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Title bar -->
         <Border Grid.Row="0"
                 Background="#102020"
                 BorderBrush="#2D4C4F"
@@ -78,7 +77,6 @@
             </Grid>
         </Border>
 
-        <!-- Settings content -->
         <ContentPresenter x:Name="ContentArea" Grid.Row="1"/>
     </Grid>
 </Window>

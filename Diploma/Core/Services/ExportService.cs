@@ -84,8 +84,8 @@ public class ExportService
             var meta = string.IsNullOrWhiteSpace(e.Metadata) ? "—" : e.Metadata;
             sb.AppendLine(
                 $"| `{e.Offset:mm\\:ss\\.f}` " +
-                $"| {EscapeMd(e.EventType)} " +
-                $"| {EscapeMd(e.Description)} " +
+                $"| {EscapeMd(e.EventType!)} " +
+                $"| {EscapeMd(e.Description!)} " +
                 $"| {EscapeMd(meta)} |");
         }
 
@@ -103,13 +103,13 @@ public class ExportService
 
         foreach (var e in entries)
         {
-            if (!IsChapterWorthy(e.EventType))
+            if (!IsChapterWorthy(e.EventType!))
                 continue;
 
-            if (IsThrottled(e.EventType, e.Offset, lastChapterOffset))
+            if (IsThrottled(e.EventType!, e.Offset, lastChapterOffset))
                 continue;
 
-            lastChapterOffset[e.EventType] = e.Offset;
+            lastChapterOffset[e.EventType!] = e.Offset;
 
             sb.AppendLine($"{FormatYouTubeTimestamp(e.Offset)} {BuildChapterLabel(e)}");
         }
@@ -137,14 +137,14 @@ public class ExportService
         _                       => false
     };
 
-    private static string BuildChapterLabel(LogEntry entry) => entry.EventType switch
+    private static string BuildChapterLabel(LogEntry entry) => (entry.EventType switch
     {
         EventTypes.ManualMarker => entry.Description,
         EventTypes.RunOrDebug   => $"▶ {entry.Description}",
         EventTypes.IdleStart    => "⏸ Пауза",
         EventTypes.IdeOpened    => $"🖥 {entry.Description}",
         _ => entry.Description
-    };
+    })!;
 
     private static string FormatYouTubeTimestamp(TimeSpan offset)
     {

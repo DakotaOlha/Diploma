@@ -102,6 +102,7 @@ public sealed class MediaMergeService
                 path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
 
             Span<byte> header = stackalloc byte[8];
+            Span<byte> ext    = stackalloc byte[8];
 
             while (fs.Position + 8 <= fs.Length)
             {
@@ -122,7 +123,6 @@ public sealed class MediaMergeService
 
                 if (size == 1)
                 {
-                    Span<byte> ext = stackalloc byte[8];
                     if (fs.Read(ext) < 8) break;
                     ulong extSize = 0;
                     for (int i = 0; i < 8; i++) extSize = (extSize << 8) | ext[i];

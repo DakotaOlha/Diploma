@@ -52,7 +52,6 @@ public partial class MainViewModel : ObservableObject
     private string   _currentAudioPath  = string.Empty;
     private string   _currentVideoPath  = string.Empty;
     private string   _currentSessionDir = string.Empty;
-    private DateTime _recordingStartedAt;
 
     private System.Windows.Threading.DispatcherTimer? _durationTimer;
 
@@ -408,7 +407,6 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        // Фіксуємо час ДО діалогу, щоб offset маркера відповідав відео
         var capturedAt = DateTime.UtcNow;
 
         var dir           = Path.GetDirectoryName(_currentVideoPath)!;

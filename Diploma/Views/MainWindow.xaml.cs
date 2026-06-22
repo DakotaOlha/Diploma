@@ -12,8 +12,6 @@ public partial class MainWindow : Window
     private readonly MainViewModel _viewModel;
     private bool _isShutdownConfirmed;
 
-    // ── WM_GETMINMAXINFO hook — ensures maximized window respects taskbar ──
-
     private const int WM_GETMINMAXINFO = 0x0024;
 
     [StructLayout(LayoutKind.Sequential)]

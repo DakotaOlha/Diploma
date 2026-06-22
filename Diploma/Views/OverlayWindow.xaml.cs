@@ -58,10 +58,8 @@ public partial class OverlayWindow : Window
             npc.PropertyChanged += OnViewModelPropertyChanged;
 
         Loaded += OnLoaded;
-        Closed += OnClosed;
+        Closed += OnClosed!;
     }
-
-    // ── Lifecycle ────────────────────────────────────────────────────────────
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -92,7 +90,6 @@ public partial class OverlayWindow : Window
             npc.PropertyChanged -= OnViewModelPropertyChanged;
     }
 
-    // Re-expand if the recording start was cancelled (picker dismissed or error).
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is not (nameof(MainViewModel.IsBusy) or nameof(MainViewModel.IsRecording)))
@@ -118,8 +115,6 @@ public partial class OverlayWindow : Window
         }
         catch (Exception) { }
     }
-
-    // ── Violation banner ─────────────────────────────────────────────────────
 
     private void OnViolationDetected(object? sender, string message)
     {
@@ -151,8 +146,6 @@ public partial class OverlayWindow : Window
         _violationTimer.Start();
     }
 
-    // ── Expand / Collapse ─────────────────────────────────────────────────────
-
     public new void Show()
     {
         base.Show();
@@ -167,7 +160,6 @@ public partial class OverlayWindow : Window
         CollapsedStrip.Visibility = Visibility.Collapsed;
         ExpandedBar.Visibility    = Visibility.Visible;
 
-        // Restore violation banner if its timer is still running
         if (_violationTimer != null)
             ViolationPanel.Visibility = Visibility.Visible;
 
@@ -207,8 +199,6 @@ public partial class OverlayWindow : Window
         _collapseTimer.Start();
     }
 
-    // ── Mouse handlers ───────────────────────────────────────────────────────
-
     private void Bar_MouseMove(object sender, MouseEventArgs e)
     {
         if (_isExpanded) ResetCollapseTimer();
@@ -217,8 +207,6 @@ public partial class OverlayWindow : Window
     private void Strip_MouseEnter(object sender, MouseEventArgs e) => BeginExpand();
 
     private void Strip_Click(object sender, MouseButtonEventArgs e) => BeginExpand();
-
-    // ── Button handlers ──────────────────────────────────────────────────────
 
     private void RecordBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -230,10 +218,6 @@ public partial class OverlayWindow : Window
         }
         else
         {
-            // Collapse to 4-px strip — window stays alive (keeps app foreground
-            // status) so the system GraphicsCapturePicker can appear.
-            // CaptureTargetSelected will call Show() → BeginExpand() once the
-            // window is chosen.
             BeginCollapse();
             _ = vm.StartRecordingCommand.ExecuteAsync(null);
         }
@@ -274,7 +258,7 @@ public partial class OverlayWindow : Window
     }
 
     private void SessionsBtn_Click(object sender, RoutedEventArgs e) =>
-        NavigateMainWindow(0); // Sessions is now the first (index 0) tab
+        NavigateMainWindow(0);
 
     private void SettingsBtn_Click(object sender, RoutedEventArgs e) =>
         ((App)App.Current).GetSettingsWindow().Show();
@@ -290,8 +274,6 @@ public partial class OverlayWindow : Window
             mw.NavigateTo(tabIndex);
         }
     }
-
-    // ── Public API (called from MainViewModel) ───────────────────────────────
 
     public void UpdateDropStats(long totalDropped, int currentFps)
     {
@@ -312,8 +294,6 @@ public partial class OverlayWindow : Window
         }
         catch (Exception) { }
     }
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private void CenterAtTop()
     {

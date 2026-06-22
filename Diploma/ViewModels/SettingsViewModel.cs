@@ -56,23 +56,19 @@ public partial class SettingsViewModel : ObservableObject
         if (int.TryParse(idx, out var i)) SelectedSection = i;
     }
 
-    // Learning events
     [ObservableProperty] private bool _learningClipboard;
     [ObservableProperty] private bool _learningFileSave;
     [ObservableProperty] private bool _learningUndo;
     [ObservableProperty] private bool _learningRunDebug;
     [ObservableProperty] private bool _learningIdle;
 
-    // Work events
     [ObservableProperty] private bool _workClipboard;
     [ObservableProperty] private bool _workFileSave;
     [ObservableProperty] private bool _workRunDebug;
     [ObservableProperty] private bool _workIdle;
 
-    // Olympic behaviour
     [ObservableProperty] private bool _olympicShowViolationToast;
 
-    // Personal events
     [ObservableProperty] private bool _personalClipboard;
     [ObservableProperty] private bool _personalFileSave;
     [ObservableProperty] private bool _personalRunDebug;

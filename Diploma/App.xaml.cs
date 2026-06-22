@@ -90,7 +90,6 @@ public partial class App : Application
 
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();
         MainWindow = mainWindow;
-        // Main window opens on demand (Sessions / Settings buttons in overlay)
 
         var overlay = _host.Services.GetRequiredService<OverlayWindow>();
         overlay.Show();

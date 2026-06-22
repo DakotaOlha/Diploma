@@ -64,7 +64,6 @@
                     <DataGrid.RowStyle>
                         <Style TargetType="DataGridRow">
                             <Style.Triggers>
-                                <!-- Active entry highlighted in blue (applied first) -->
                                 <DataTrigger Value="True">
                                     <DataTrigger.Binding>
                                         <MultiBinding Converter="{StaticResource IsActiveEntry}">
@@ -76,7 +75,6 @@
                                     <Setter Property="Background" Value="#1A1E88E5"/>
                                     <Setter Property="FontWeight" Value="Medium"/>
                                 </DataTrigger>
-                                <!-- Rule violations always shown in red (applied last → wins) -->
                                 <DataTrigger Binding="{Binding EventType}" Value="RULE_VIOLATION">
                                     <Setter Property="Background" Value="#33FF1744"/>
                                     <Setter Property="FontWeight" Value="SemiBold"/>

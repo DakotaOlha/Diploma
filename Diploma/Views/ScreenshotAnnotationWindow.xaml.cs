@@ -13,13 +13,13 @@ public partial class ScreenshotAnnotationWindow : Window
 {
     private enum Tool
     {
-        Select,     // виділення / переміщення / редагування елементів  [S]
-        Arrow,      // малювання стрілки на canvas                      [A]
-        Rect,       // прямокутник                                      [R]
-        Pen,        // вільний олівець (InkCanvas Ink mode)             [P]
-        Text,       // розміщення текстового блоку                      [T]
-        Highlight,  // маркер (напівпрозорий прямокутник)               [M]
-        Eraser,     // гумка (InkCanvas EraseByPoint mode)              [E]
+        Select,     // [S]
+        Arrow,      // [A]
+        Rect,       // [R]
+        Pen,        // [P]
+        Text,       // [T]
+        Highlight,  // [M]
+        Eraser,     // [E]
     }
 
     private readonly record struct UndoEntry

@@ -39,7 +39,6 @@
                 <RowDefinition Height="44"/>
             </Grid.RowDefinitions>
 
-            <!-- Titlebar -->
             <Border Grid.Row="0" CornerRadius="10,10,0,0"
                     MouseLeftButtonDown="TitleBar_MouseDown"
                     Background="Transparent" Cursor="SizeAll">
@@ -54,7 +53,6 @@
                 </Grid>
             </Border>
 
-            <!-- Canvas area -->
             <Border Grid.Row="1" Background="#000" ClipToBounds="True">
                 <Grid x:Name="CanvasHost">
                     <Image x:Name="SourceImage"
@@ -72,27 +70,16 @@
                 </Grid>
             </Border>
 
-            <!-- Bottom toolbar -->
             <Border Grid.Row="2" Background="#2C2C2E"
                     CornerRadius="0,0,10,10"
                     BorderBrush="#3A3A3C" BorderThickness="0,1,0,0">
                 <Grid Margin="12,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
 
-                        <!--
-                            SELECT tool: cursor/pointer іконка (як у Figma/Photoshop).
-                            Чітко відрізняється від Arrow-drawing tool.
-                            Hotkey: S
-                        -->
                         <Button x:Name="BtnSelect" Click="Tool_Click" Tag="Select"
                                 Style="{StaticResource ToolBtnActive}"
                                 ToolTip="Виділення та переміщення [S]">
                             <Button.Content>
-                                <!--
-                                    Pointer/cursor іконка:
-                                    заповнена стрілка-курсор — стандартна іконка select-mode
-                                    у Figma, Photoshop, Illustrator.
-                                -->
                                 <Path Data="M5,3 L5,16 L8,13 L11,19 L13,18 L10,12 L14,12 Z"
                                       Fill="#FFFFFF"
                                       Stroke="#FFFFFF" StrokeThickness="0.5"
@@ -100,22 +87,12 @@
                             </Button.Content>
                         </Button>
 
-                        <!-- Separator -->
                         <Rectangle Width="1" Height="20" Fill="#3A3A3C" Margin="4,0"/>
 
-                        <!--
-                            ARROW drawing tool: малює стрілку на canvas.
-                            Іконка — лінія зі стрілкою (directional arrow), не cursor.
-                            Hotkey: A
-                        -->
                         <Button x:Name="BtnArrow" Click="Tool_Click" Tag="Arrow"
                                 Style="{StaticResource ToolBtn}"
                                 ToolTip="Стрілка — малювання [A]">
                             <Button.Content>
-                                <!--
-                                    Directional arrow: горизонтальна лінія + наконечник.
-                                    Візуально відрізняється від pointer курсору.
-                                -->
                                 <Canvas Width="18" Height="18">
                                     <Line X1="2" Y1="9" X2="15" Y2="9"
                                           Stroke="#CCCCCC" StrokeThickness="1.8"
@@ -175,10 +152,8 @@
                             </Button.Content>
                         </Button>
 
-                        <!-- Separator -->
                         <Rectangle Width="1" Height="20" Fill="#3A3A3C" Margin="6,0"/>
 
-                        <!-- Color swatches -->
                         <ItemsControl x:Name="ColorPicker" Margin="0,0,6,0">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -209,10 +184,8 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <!-- Separator -->
                         <Rectangle Width="1" Height="20" Fill="#3A3A3C" Margin="6,0"/>
 
-                        <!-- Thickness -->
                         <TextBlock Text="Розмір:" Foreground="#666" FontSize="11"
                                    VerticalAlignment="Center" Margin="0,0,6,0"/>
                         <Slider x:Name="ThicknessSlider"
@@ -220,7 +193,6 @@
                                 Width="70" VerticalAlignment="Center"
                                 ValueChanged="ThicknessSlider_ValueChanged"/>
 
-                        <!-- Undo -->
                         <Rectangle Width="1" Height="20" Fill="#3A3A3C" Margin="6,0"/>
                         <Button Style="{StaticResource ToolBtn}" Click="Undo_Click"
                                 ToolTip="Скасувати (Ctrl+Z)">
@@ -233,7 +205,6 @@
                         </Button>
                     </StackPanel>
 
-                    <!-- Save button -->
                     <Button Content="Зберегти"
                             HorizontalAlignment="Right"
                             Padding="16,0" Height="28"

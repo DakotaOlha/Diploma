@@ -32,10 +32,10 @@ public sealed class EventTypeToColorConverter : IValueConverter
         ["IDLE_END"]        = Brush("#E0E0E0"), // light grey
 
         // Markers & screenshots
-        ["MANUAL_MARKER"]   = Brush("#FFD54F"), // amber  ← most important
+        ["MANUAL_MARKER"]   = Brush("#FFD54F"), // amber
         ["SCREENSHOT"]      = Brush("#F48FB1"), // pink
 
-        // Rule violations — bright red, draws immediate attention
+        // Rule violations — bright red
         ["RULE_VIOLATION"]  = Brush("#FF1744"),
     };
 

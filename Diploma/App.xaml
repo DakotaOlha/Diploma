@@ -12,7 +12,6 @@
 
             <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
-            <!-- ── CheckBox with gold checkmark (used in mode cards) ── -->
             <Style x:Key="GoldCheckBoxStyle" TargetType="CheckBox">
                 <Setter Property="Foreground"        Value="#D9E9E9"/>
                 <Setter Property="FontSize"          Value="12"/>
@@ -52,7 +51,6 @@
                 </Setter>
             </Style>
 
-            <!-- ── Settings sidebar ListBoxItem ── -->
             <Style x:Key="NavItemStyle" TargetType="ListBoxItem">
                 <Setter Property="Foreground"    Value="#9FA6A6"/>
                 <Setter Property="Background"    Value="Transparent"/>
@@ -102,7 +100,6 @@
                 <Setter Property="hc:BorderElement.CornerRadius" Value="0"/>
             </Style>
 
-            <!-- CustomComboBoxStyle — global so UserControls can use it before entering the Window visual tree -->
             <Style x:Key="CustomComboBoxStyle" TargetType="ComboBox">
                 <Setter Property="FontSize" Value="13"/>
                 <Setter Property="Foreground" Value="#D9E9E9"/>

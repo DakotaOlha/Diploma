@@ -22,10 +22,8 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- Конвертер для відображення вибраного елемента -->
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
-        <!-- Стиль TabControl -->
         <Style TargetType="TabControl">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="#2D4C4F"/>
@@ -59,7 +57,6 @@
             </Setter>
         </Style>
 
-        <!-- Стиль TabItem -->
         <Style TargetType="TabItem">
             <Setter Property="Foreground" Value="#99D9E9E9"/>
             <Setter Property="Background" Value="Transparent"/>
@@ -100,7 +97,6 @@
             </Setter>
         </Style>
 
-        <!-- Стиль Button -->
         <Style TargetType="Button">
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -140,7 +136,6 @@
             </Setter>
         </Style>
 
-        <!-- Стиль для кнопок керування вікном -->
         <Style x:Key="WindowControlButtonStyle" TargetType="Button">
             <Setter Property="Width" Value="46"/>
             <Setter Property="Height" Value="32"/>
@@ -170,7 +165,6 @@
             </Setter>
         </Style>
 
-        <!-- Стиль для кнопки закриття -->
         <Style x:Key="CloseButtonStyle" TargetType="Button" BasedOn="{StaticResource WindowControlButtonStyle}">
             <Setter Property="Foreground" Value="#D9E9E9"/>
             <Style.Triggers>
@@ -180,16 +174,13 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
-
-
-        <!-- CheckBox Style -->
+        
         <Style TargetType="CheckBox">
             <Setter Property="Foreground" Value="#D9E9E9"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
-        <!-- TextBlock Style for labels -->
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="#D9E9E9"/>
         </Style>
@@ -202,7 +193,6 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Кастомний заголовок вікна -->
             <Border Grid.Row="0" 
                     Background="#102020" 
                     Padding="0" 
@@ -216,7 +206,6 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     
-                    <!-- Іконка та назва -->
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
                         <TextBlock Text="AlgoReplay" 
                                    FontSize="14" FontWeight="SemiBold" 
@@ -225,7 +214,6 @@
                                    IsHitTestVisible="False"/>
                     </StackPanel>
                     
-                    <!-- Кнопки керування вікном -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal">
                         <Button x:Name="BtnMinimize"
                                 Content="&#xE921;" 
@@ -248,7 +236,6 @@
                 </Grid>
             </Border>
 
-            <!-- Основний контент -->
             <TabControl x:Name="MainTabControl" Grid.Row="1" Margin="0,8,0,0">
                 <TabItem Header="📋 Сесії" x:Name="SessionsTab"/>
 

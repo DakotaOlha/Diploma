@@ -5,7 +5,6 @@
 
     <UserControl.Resources>
 
-        <!-- ── Save button ── -->
         <Style x:Key="SaveBtnStyle" TargetType="Button">
             <Setter Property="Background"      Value="#2D4C4F"/>
             <Setter Property="BorderBrush"     Value="#577072"/>
@@ -41,7 +40,6 @@
             </Setter>
         </Style>
 
-        <!-- ── Card border base style (active card highlighted in gold) ── -->
         <Style x:Key="ModeCardBorderBase" TargetType="Border">
             <Setter Property="CornerRadius"    Value="10"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -51,7 +49,6 @@
             <Setter Property="Margin"          Value="0,0,0,8"/>
         </Style>
 
-        <!-- ComboBox override for card-dark bg -->
         <Style x:Key="DarkComboBoxStyle" TargetType="ComboBox"
                BasedOn="{StaticResource CustomComboBoxStyle}">
             <Setter Property="Background"   Value="#1B2E2F"/>
@@ -67,9 +64,6 @@
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- ════════════════════════════════════════════
-             LEFT SIDEBAR
-             ════════════════════════════════════════════ -->
         <Grid Grid.Column="0" Background="{StaticResource BgDarkBrush}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -78,7 +72,6 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- Header -->
             <StackPanel Grid.Row="0" Orientation="Horizontal"
                         Margin="20,22,16,20" VerticalAlignment="Center">
                 <TextBlock Text="⚙" FontSize="17" FontWeight="Bold"
@@ -89,11 +82,9 @@
                            VerticalAlignment="Center"/>
             </StackPanel>
 
-            <!-- Separator -->
             <Rectangle Grid.Row="1" Height="1"
                        Fill="{StaticResource BorderMidBrush}" Margin="0,0,0,4"/>
 
-            <!-- Nav -->
             <ListBox Grid.Row="2"
                      SelectedIndex="{Binding SelectedSection, Mode=TwoWay}"
                      Background="Transparent" BorderThickness="0"
@@ -118,16 +109,12 @@
                 </ListBoxItem>
             </ListBox>
 
-            <!-- Version -->
             <TextBlock Grid.Row="3" Text="AlgoReplay"
                        HorizontalAlignment="Center"
                        Foreground="{StaticResource TextDimBrush}"
                        FontSize="10" Margin="0,0,0,12"/>
         </Grid>
 
-        <!-- ════════════════════════════════════════════
-             RIGHT CONTENT PANEL
-             ════════════════════════════════════════════ -->
         <Border Grid.Column="1"
                 Background="{StaticResource BgMidBrush}"
                 BorderBrush="{StaticResource BorderMidBrush}"
@@ -140,30 +127,25 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Section title -->
                 <TextBlock Grid.Row="0"
                            Text="{Binding SectionTitle}"
                            FontSize="22" FontWeight="Bold"
                            Foreground="{StaticResource TextLightBrush}"
                            Margin="24,20,24,0"/>
 
-                <!-- Title separator -->
                 <Rectangle Grid.Row="1" Height="1"
                            Fill="{StaticResource BorderMidBrush}"
                            Margin="0,12,0,0" Opacity="0.6"/>
 
-                <!-- ── Scrollable content ── -->
                 <ScrollViewer Grid.Row="2"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled"
                               Margin="0,0,0,0">
                     <Grid Margin="24,16,24,8">
 
-                        <!-- ══════════ SECTION 0: ЗАГАЛЬНІ ══════════ -->
                         <StackPanel Visibility="{Binding IsGeneralSection,
                                                   Converter={StaticResource BoolToVis}}">
 
-                            <!-- Quality row -->
                             <Grid Margin="0,0,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -189,7 +171,6 @@
                             <Rectangle Height="1" Fill="{StaticResource BorderMidBrush}"
                                        Opacity="0.4" Margin="0,14,0,14"/>
 
-                            <!-- Mode row -->
                             <Grid Margin="0,0,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -212,7 +193,6 @@
                                           DisplayMemberPath="DisplayName"/>
                             </Grid>
 
-                            <!-- Mode overview header -->
                             <TextBlock Text="РЕЖИМИ ЗАПИСУ"
                                        FontSize="10" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextDimBrush}"
@@ -220,7 +200,6 @@
                             <Rectangle Height="1" Fill="{StaticResource BorderMidBrush}"
                                        Opacity="0.5" Margin="0,0,0,10"/>
 
-                            <!-- Olympic info card -->
                             <Border Padding="14,12" CornerRadius="10" Margin="0,0,0,8">
                                 <Border.Style>
                                     <Style TargetType="Border">
@@ -256,7 +235,6 @@
                                 </Grid>
                             </Border>
 
-                            <!-- Learning info card -->
                             <Border Padding="14,12" CornerRadius="10" Margin="0,0,0,8">
                                 <Border.Style>
                                     <Style TargetType="Border">
@@ -296,7 +274,6 @@
                                 </Grid>
                             </Border>
 
-                            <!-- Personal info card -->
                             <Border Padding="14,12" CornerRadius="10" Margin="0,0,0,8">
                                 <Border.Style>
                                     <Style TargetType="Border">
@@ -336,7 +313,6 @@
                                 </Grid>
                             </Border>
 
-                            <!-- Work info card -->
                             <Border Padding="14,12" CornerRadius="10" Margin="0,0,0,8">
                                 <Border.Style>
                                     <Style TargetType="Border">
@@ -378,7 +354,6 @@
 
                         </StackPanel>
 
-                        <!-- ══════════ SECTION 1: ЛОГУВАННЯ ══════════ -->
                         <StackPanel Visibility="{Binding IsLoggingSection,
                                                   Converter={StaticResource BoolToVis}}">
 
@@ -386,7 +361,6 @@
                                        FontSize="12" Foreground="{StaticResource TextMutedBrush}"
                                        Margin="0,0,0,14"/>
 
-                            <!-- Olympic -->
                             <Border Padding="14,12" CornerRadius="10" Margin="0,0,0,8">
                                 <Border.Style>
                                     <Style TargetType="Border">
@@ -435,7 +409,6 @@
                                 </Grid>
                             </Border>
 
-                            <!-- Learning -->
                             <Border Padding="14,12" CornerRadius="10" Margin="0,0,0,8">
                                 <Border.Style>
                                     <Style TargetType="Border">
@@ -482,7 +455,6 @@
                                 </Grid>
                             </Border>
 
-                            <!-- Personal -->
                             <Border Padding="14,12" CornerRadius="10" Margin="0,0,0,8">
                                 <Border.Style>
                                     <Style TargetType="Border">
@@ -530,7 +502,6 @@
                                 </Grid>
                             </Border>
 
-                            <!-- Work -->
                             <Border Padding="14,12" CornerRadius="10" Margin="0,0,0,8">
                                 <Border.Style>
                                     <Style TargetType="Border">
@@ -578,11 +549,9 @@
 
                         </StackPanel>
 
-                        <!-- ══════════ SECTION 2: ГАРЯЧІ КЛАВІШІ ══════════ -->
                         <StackPanel Visibility="{Binding IsHotkeysSection,
                                                   Converter={StaticResource BoolToVis}}">
 
-                            <!-- AlgoReplay globals -->
                             <TextBlock Text="AlgoReplay — глобальні"
                                        FontSize="12" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextLightBrush}"
@@ -629,7 +598,6 @@
                                 </Grid>
                             </Border>
 
-                            <!-- Screenshot editor -->
                             <TextBlock Text="Редактор скріншотів"
                                        FontSize="12" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextLightBrush}"
@@ -656,7 +624,6 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <!-- Tool hotkeys -->
                                     <Border Grid.Row="0" Grid.Column="0" Background="#1E2E30" CornerRadius="4" Padding="7,3" Margin="0,2,8,2" HorizontalAlignment="Left">
                                         <TextBlock Text="S" FontFamily="Consolas" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
                                     </Border>
@@ -724,7 +691,6 @@
                     </Grid>
                 </ScrollViewer>
 
-                <!-- ── Bottom bar ── -->
                 <Border Grid.Row="3"
                         Background="{StaticResource BgCardBrush}"
                         BorderBrush="{StaticResource BorderMidBrush}"

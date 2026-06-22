@@ -11,7 +11,6 @@ using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
 using Diploma.Core.Interfaces;
-using Diploma.Core.Models;
 using Diploma.Helpers;
 using FFMpegCore;
 using FFMpegCore.Pipes;
@@ -229,7 +228,7 @@ public sealed class ScreenCaptureService : IScreenCaptureService, IDisposable
                     .FirstOrDefault(h => h != IntPtr.Zero);
 
                 if (hwnd == IntPtr.Zero)
-                    hwnd = new WindowInteropHelper(Application.Current.MainWindow).EnsureHandle();
+                    hwnd = new WindowInteropHelper(Application.Current.MainWindow!).EnsureHandle();
 
                 return await CapturePickerHelper.PickAsync(hwnd);
             }).Task.Unwrap().ConfigureAwait(false);

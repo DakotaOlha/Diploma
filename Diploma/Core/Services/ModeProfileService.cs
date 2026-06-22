@@ -13,7 +13,7 @@ public class ModeProfileService
             [RecordingMode.Olympic] = new()
             {
                 Mode           = RecordingMode.Olympic,
-                DisplayName    = "🏆 Олімпіада",
+                DisplayName    = "Олімпіада",
                 Description    = "Суворий режим для ICPC та подібних змагань",
                 IsCustomizable = false,
                 AllowedEvents  = new HashSet<string>
@@ -32,7 +32,7 @@ public class ModeProfileService
             [RecordingMode.Learning] = new()
             {
                 Mode           = RecordingMode.Learning,
-                DisplayName    = "📚 Навчання",
+                DisplayName    = "Навчання",
                 Description    = "Для навчальних сесій та туторіалів",
                 IsCustomizable = true,
                 AllowedEvents  = new HashSet<string>
@@ -52,7 +52,7 @@ public class ModeProfileService
             [RecordingMode.Work] = new()
             {
                 Mode           = RecordingMode.Work,
-                DisplayName    = "💼 Робота",
+                DisplayName    = "Робота",
                 Description    = "Для робочих сесій та код рев'ю",
                 IsCustomizable = true,
                 AllowedEvents  = new HashSet<string>
@@ -69,7 +69,7 @@ public class ModeProfileService
             [RecordingMode.Personal] = new()
             {
                 Mode           = RecordingMode.Personal,
-                DisplayName    = "🙂 Особистий",
+                DisplayName    = "Особистий",
                 Description    = "Вільний режим, всі події записуються",
                 IsCustomizable = true,
                 AllowedEvents  = new HashSet<string>
